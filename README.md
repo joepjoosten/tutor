@@ -4,6 +4,9 @@ A Next.js application that helps students study by automatically generating flas
 
 ## Features
 
+- **Image Cropping**: Crop each image before uploading to focus on relevant content
+- **Camera Support**: Take photos directly from your mobile device or upload from files
+- **Automatic Compression**: Images are automatically compressed to ~1MB for faster processing
 - **Multiple Image Upload**: Upload one or more images at once before generating flashcards
 - **Custom Instructions**: Add specific guidance for the AI (e.g., "Focus on vocabulary", "Include step-by-step solutions")
 - **Manual Submit**: Review uploaded images and instructions before generating
@@ -63,17 +66,26 @@ The app will be available at http://localhost:3000
 ### Creating Flashcards
 
 1. Go to the home page
-2. Click to upload images (you can select multiple at once)
-3. Add more images if needed by clicking upload again
-4. Review the uploaded images (remove any with the X button)
-5. Select an AI model from the dropdown
-6. (Optional) Add custom instructions in the textarea
+2. Click to upload images or take photos
+   - **On Mobile**: Camera will open to take photos directly
+   - **On Desktop**: Select image files from your computer
+   - You can select multiple images at once
+3. **Crop each image**:
+   - A crop tool will appear for each image
+   - Drag inside the blue rectangle to move the crop area
+   - Drag corners to resize the crop area
+   - Click "Crop & Continue" or "Cancel" to skip
+4. Add more images if needed by clicking upload again
+5. Review the uploaded images (remove any with the X button)
+   - Images over 1MB are automatically compressed after cropping
+6. Select an AI model from the dropdown
+7. (Optional) Add custom instructions in the textarea
    - Example: "Focus on vocabulary words"
    - Example: "Include step-by-step math solutions"
    - Example: "Make questions appropriate for a 5th grader"
-7. Click "Generate Flashcards from X Image(s)"
-8. Wait 10-30 seconds for the AI to analyze and create flashcards
-9. Review your generated flashcards
+8. Click "Generate Flashcards from X Image(s)"
+9. Wait 10-30 seconds for the AI to analyze and create flashcards
+10. Review your generated flashcards
 
 ### Studying Flashcards
 

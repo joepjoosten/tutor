@@ -31,7 +31,11 @@ The app will open at http://localhost:3000
 ### Create Flashcards
 
 1. Go to http://localhost:3000
-2. Click to upload images (you can select multiple at once!)
+2. Click to upload images or take photos
+   - **Mobile**: Opens camera to take photos directly
+   - **Desktop**: Select image files
+   - Multiple images can be selected at once
+   - Large images are automatically compressed to ~1MB
 3. Add more images if needed by clicking upload again
 4. Review your uploaded images and remove any mistakes (hover and click X)
 5. Select an AI model (Gemini Flash 1.5 is recommended for speed)

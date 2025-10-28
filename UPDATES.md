@@ -1,6 +1,50 @@
 # Updates - Enhanced Features
 
-## Latest Changes (v2)
+## Latest Changes (v4.1)
+
+### Touch-Friendly Image Cropping
+- **Full Touch Support**: Complete touch event handling for mobile devices
+- **Larger Touch Targets**: Corner handles are 20px visible, 30px touch area
+- **Thicker Lines**: 3px border for better visibility on mobile
+- **Prevent Scrolling**: `touchAction: 'none'` prevents page scroll during crop
+- **Unified Gestures**: Same drag and resize gestures work with touch and mouse
+- **Larger Buttons**: Increased button padding for easier mobile tapping
+
+### Image Cropping (v4)
+- **Interactive Crop Tool**: Crop images before uploading them
+- **Drag to Move**: Click/touch and drag inside the crop area to reposition
+- **Resize Handles**: Drag corners to adjust crop size
+- **Visual Feedback**: Semi-transparent overlay shows what will be excluded
+- **Queue System**: When uploading multiple images, crop them one by one
+- **Skip Option**: Cancel button to skip cropping an image
+- **Seamless Flow**: After cropping, automatically moves to next image
+- **Compression After Crop**: Cropped images are still compressed if over 1MB
+
+### Mobile Optimizations
+- Touch events: onTouchStart, onTouchMove, onTouchEnd, onTouchCancel
+- Prevents default touch behavior to avoid conflicts
+- Extracts touch coordinates from touch events
+- Works seamlessly on phones and tablets
+- No zoom or scroll interference
+
+## Previous Changes (v3)
+
+### Camera Support
+- **Native Camera**: Added `capture="environment"` attribute to enable camera capture on mobile devices
+- **Direct Photo Taking**: On mobile devices, users can now directly take photos of homework
+- **Desktop Support**: Still works as file upload on desktop browsers
+- **User-Friendly**: Button text updated to "Click to upload or take photo"
+
+### Automatic Image Compression
+- **Smart Compression**: Images over 1MB are automatically compressed before upload
+- **Quality Preservation**: Uses canvas-based compression with quality adjustment (starts at 90%, reduces as needed)
+- **Size Target**: Compresses to approximately 1MB per image
+- **Dimension Limits**: Resizes images to max 1920px on longest side while maintaining aspect ratio
+- **Fallback**: If compression fails, original image is used
+- **Console Logging**: Logs compression results for debugging (e.g., "3200KB -> 980KB")
+- **Benefits**: Faster uploads, reduced API costs, better performance
+
+## Previous Changes (v2)
 
 ### Improved Multi-Image Handling
 - **Enhanced Prompt**: LLM now explicitly told to examine ALL images before creating flashcards
