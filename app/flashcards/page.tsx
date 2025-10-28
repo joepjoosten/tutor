@@ -24,6 +24,10 @@ export default function FlashcardsPage() {
   const [selectedSet, setSelectedSet] = useState<FlashcardSet | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [editedDescription, setEditedDescription] = useState('');
 
   useEffect(() => {
     loadFlashcardSets();
@@ -81,6 +85,74 @@ export default function FlashcardsPage() {
     });
   };
 
+  const startEditingTitle = () => {
+    if (selectedSet) {
+      setEditedTitle(selectedSet.title);
+      setIsEditingTitle(true);
+    }
+  };
+
+  const cancelEditingTitle = () => {
+    setIsEditingTitle(false);
+    setEditedTitle('');
+  };
+
+  const saveTitle = async () => {
+    if (!selectedSet || !editedTitle.trim()) return;
+
+    try {
+      const response = await fetch(`/api/flashcard-sets/${selectedSet.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editedTitle, description: selectedSet.description }),
+      });
+
+      if (response.ok) {
+        const updatedSet = await response.json();
+        setSelectedSet({ ...selectedSet, title: updatedSet.title });
+        setSets(prev => prev.map(s => s.id === updatedSet.id ? { ...s, title: updatedSet.title } : s));
+        setIsEditingTitle(false);
+      }
+    } catch (error) {
+      console.error('Failed to update set title:', error);
+      alert('Failed to update set title');
+    }
+  };
+
+  const startEditingDescription = () => {
+    if (selectedSet) {
+      setEditedDescription(selectedSet.description || '');
+      setIsEditingDescription(true);
+    }
+  };
+
+  const cancelEditingDescription = () => {
+    setIsEditingDescription(false);
+    setEditedDescription('');
+  };
+
+  const saveDescription = async () => {
+    if (!selectedSet) return;
+
+    try {
+      const response = await fetch(`/api/flashcard-sets/${selectedSet.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: selectedSet.title, description: editedDescription.trim() || undefined }),
+      });
+
+      if (response.ok) {
+        const updatedSet = await response.json();
+        setSelectedSet({ ...selectedSet, description: updatedSet.description });
+        setSets(prev => prev.map(s => s.id === updatedSet.id ? { ...s, description: updatedSet.description } : s));
+        setIsEditingDescription(false);
+      }
+    } catch (error) {
+      console.error('Failed to update set description:', error);
+      alert('Failed to update set description');
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
@@ -113,15 +185,85 @@ export default function FlashcardsPage() {
             ← Back to all sets
           </button>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              {selectedSet.title}
-            </h2>
-            {selectedSet.description && (
-              <p className="text-gray-600 dark:text-gray-400 mb-2">
-                {selectedSet.description}
-              </p>
+            {isEditingTitle ? (
+              <div className="mb-4">
+                <input
+                  type="text"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xl font-bold"
+                />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={saveTitle}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={cancelEditingTitle}
+                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-between items-start mb-2">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {selectedSet.title}
+                </h2>
+                <button
+                  onClick={startEditingTitle}
+                  className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                >
+                  Edit Title
+                </button>
+              </div>
             )}
-            <p className="text-sm text-gray-500 dark:text-gray-500">
+            {isEditingDescription ? (
+              <div className="mb-4">
+                <textarea
+                  value={editedDescription}
+                  onChange={(e) => setEditedDescription(e.target.value)}
+                  placeholder="Add a description (optional)"
+                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[80px] resize-y"
+                />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={saveDescription}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={cancelEditingDescription}
+                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-between items-start mb-2">
+                {selectedSet.description ? (
+                  <p className="text-gray-600 dark:text-gray-400 flex-1">
+                    {selectedSet.description}
+                  </p>
+                ) : (
+                  <p className="text-gray-400 dark:text-gray-500 italic flex-1">
+                    No description
+                  </p>
+                )}
+                <button
+                  onClick={startEditingDescription}
+                  className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600 ml-2"
+                >
+                  {selectedSet.description ? 'Edit' : 'Add'}
+                </button>
+              </div>
+            )}
+            <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
               Created: {formatDate(selectedSet.created_at)}
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
@@ -130,7 +272,11 @@ export default function FlashcardsPage() {
           </div>
         </div>
 
-        <FlashcardViewer flashcards={selectedSet.flashcards} />
+        <FlashcardViewer
+          flashcards={selectedSet.flashcards}
+          setId={selectedSet.id}
+          onUpdate={loadFlashcardSets}
+        />
       </div>
     );
   }

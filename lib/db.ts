@@ -74,6 +74,7 @@ export function initDb() {
       answer TEXT NOT NULL,
       order_index INTEGER NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      deleted_at DATETIME,
       FOREIGN KEY (set_id) REFERENCES flashcard_sets(id) ON DELETE CASCADE
     )
   `);
@@ -98,6 +99,19 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_flashcards_set_id
     ON flashcards(set_id)
   `);
+
+  // Migration: Add deleted_at column if it doesn't exist
+  try {
+    const columns = db.pragma('table_info(flashcards)');
+    const hasDeletedAt = columns.some((col: any) => col.name === 'deleted_at');
+
+    if (!hasDeletedAt) {
+      db.exec(`ALTER TABLE flashcards ADD COLUMN deleted_at DATETIME`);
+    }
+  } catch (error) {
+    // Column might already exist or table doesn't exist yet
+    console.log('Migration check:', error);
+  }
 }
 
 // Initialize the database on import

@@ -41,6 +41,7 @@ export interface Flashcard {
   answer: string;
   order_index: number;
   created_at: string;
+  deleted_at: string | null;
 }
 
 // Image operations
@@ -167,6 +168,16 @@ export const FlashcardSetModel = {
     return stmt.all() as FlashcardSet[];
   },
 
+  update: (id: number, data: { title: string; description?: string }): FlashcardSet | undefined => {
+    const stmt = db.prepare(`
+      UPDATE flashcard_sets
+      SET title = ?, description = ?
+      WHERE id = ?
+    `);
+    stmt.run(data.title, data.description ?? null, id);
+    return FlashcardSetModel.findById(id);
+  },
+
   delete: (id: number): void => {
     const stmt = db.prepare('DELETE FROM flashcard_sets WHERE id = ?');
     stmt.run(id);
@@ -195,8 +206,27 @@ export const FlashcardModel = {
   },
 
   findBySetId: (setId: number): Flashcard[] => {
-    const stmt = db.prepare('SELECT * FROM flashcards WHERE set_id = ? ORDER BY order_index');
+    const stmt = db.prepare('SELECT * FROM flashcards WHERE set_id = ? AND deleted_at IS NULL ORDER BY order_index');
     return stmt.all(setId) as Flashcard[];
+  },
+
+  update: (id: number, data: { question: string; answer: string }): Flashcard | undefined => {
+    const stmt = db.prepare(`
+      UPDATE flashcards
+      SET question = ?, answer = ?
+      WHERE id = ?
+    `);
+    stmt.run(data.question, data.answer, id);
+    return FlashcardModel.findById(id);
+  },
+
+  delete: (id: number): void => {
+    const stmt = db.prepare(`
+      UPDATE flashcards
+      SET deleted_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    stmt.run(id);
   },
 
   bulkCreate: (flashcards: {
