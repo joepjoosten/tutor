@@ -31,7 +31,16 @@ export interface FlashcardSet {
   title: string;
   description: string | null;
   llm_interaction_id: number;
+  flip_mode: number;
   created_at: string;
+}
+
+export interface StudyProgress {
+  id: number;
+  set_id: number;
+  flashcard_id: number;
+  dont_know: number;
+  marked_at: string;
 }
 
 export interface Flashcard {
@@ -168,13 +177,32 @@ export const FlashcardSetModel = {
     return stmt.all() as FlashcardSet[];
   },
 
-  update: (id: number, data: { title: string; description?: string }): FlashcardSet | undefined => {
+  update: (id: number, data: { title?: string; description?: string; flip_mode?: number }): FlashcardSet | undefined => {
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (data.title !== undefined) {
+      updates.push('title = ?');
+      values.push(data.title);
+    }
+    if (data.description !== undefined) {
+      updates.push('description = ?');
+      values.push(data.description ?? null);
+    }
+    if (data.flip_mode !== undefined) {
+      updates.push('flip_mode = ?');
+      values.push(data.flip_mode);
+    }
+
+    if (updates.length === 0) return FlashcardSetModel.findById(id);
+
+    values.push(id);
     const stmt = db.prepare(`
       UPDATE flashcard_sets
-      SET title = ?, description = ?
+      SET ${updates.join(', ')}
       WHERE id = ?
     `);
-    stmt.run(data.title, data.description ?? null, id);
+    stmt.run(...values);
     return FlashcardSetModel.findById(id);
   },
 
@@ -247,5 +275,32 @@ export const FlashcardModel = {
     });
 
     transaction(flashcards);
+  },
+};
+
+// Study Progress operations
+export const StudyProgressModel = {
+  findBySetId: (setId: number): StudyProgress[] => {
+    const stmt = db.prepare('SELECT * FROM study_progress WHERE set_id = ?');
+    return stmt.all(setId) as StudyProgress[];
+  },
+
+  markDontKnow: (setId: number, flashcardId: number, dontKnow: boolean): StudyProgress => {
+    const stmt = db.prepare(`
+      INSERT INTO study_progress (set_id, flashcard_id, dont_know, marked_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(set_id, flashcard_id) DO UPDATE SET
+        dont_know = excluded.dont_know,
+        marked_at = CURRENT_TIMESTAMP
+    `);
+    stmt.run(setId, flashcardId, dontKnow ? 1 : 0);
+
+    const getStmt = db.prepare('SELECT * FROM study_progress WHERE set_id = ? AND flashcard_id = ?');
+    return getStmt.get(setId, flashcardId) as StudyProgress;
+  },
+
+  resetProgress: (setId: number): void => {
+    const stmt = db.prepare('DELETE FROM study_progress WHERE set_id = ?');
+    stmt.run(setId);
   },
 };

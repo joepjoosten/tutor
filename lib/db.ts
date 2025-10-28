@@ -60,6 +60,7 @@ export function initDb() {
       title TEXT NOT NULL,
       description TEXT,
       llm_interaction_id INTEGER NOT NULL,
+      flip_mode INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (llm_interaction_id) REFERENCES llm_interactions(id) ON DELETE CASCADE
     )
@@ -100,17 +101,46 @@ export function initDb() {
     ON flashcards(set_id)
   `);
 
-  // Migration: Add deleted_at column if it doesn't exist
+  // Study progress table - tracks which cards student doesn't know
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS study_progress (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      set_id INTEGER NOT NULL,
+      flashcard_id INTEGER NOT NULL,
+      dont_know INTEGER DEFAULT 0,
+      marked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (set_id) REFERENCES flashcard_sets(id) ON DELETE CASCADE,
+      FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE,
+      UNIQUE(set_id, flashcard_id)
+    )
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_study_progress_set_id
+    ON study_progress(set_id)
+  `);
+
+  // Migrations: Add columns if they don't exist
   try {
-    const columns = db.pragma('table_info(flashcards)');
-    const hasDeletedAt = columns.some((col: any) => col.name === 'deleted_at');
+    const flashcardColumns = db.pragma('table_info(flashcards)');
+    const hasDeletedAt = flashcardColumns.some((col: any) => col.name === 'deleted_at');
 
     if (!hasDeletedAt) {
       db.exec(`ALTER TABLE flashcards ADD COLUMN deleted_at DATETIME`);
     }
   } catch (error) {
-    // Column might already exist or table doesn't exist yet
-    console.log('Migration check:', error);
+    console.log('Flashcard migration check:', error);
+  }
+
+  try {
+    const setColumns = db.pragma('table_info(flashcard_sets)');
+    const hasFlipMode = setColumns.some((col: any) => col.name === 'flip_mode');
+
+    if (!hasFlipMode) {
+      db.exec(`ALTER TABLE flashcard_sets ADD COLUMN flip_mode INTEGER DEFAULT 0`);
+    }
+  } catch (error) {
+    console.log('Flashcard set migration check:', error);
   }
 }
 

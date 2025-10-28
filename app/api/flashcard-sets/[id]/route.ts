@@ -8,16 +8,25 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const { title, description } = await request.json();
+    const body = await request.json();
+    const { title, description, flip_mode } = body;
 
-    if (!title) {
+    // Build update data object with only provided fields
+    const updateData: { title?: string; description?: string; flip_mode?: number } = {};
+
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (flip_mode !== undefined) updateData.flip_mode = flip_mode;
+
+    // At least one field must be provided
+    if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
-        { error: 'Title is required' },
+        { error: 'At least one field (title, description, or flip_mode) must be provided' },
         { status: 400 }
       );
     }
 
-    const flashcardSet = FlashcardSetModel.update(parseInt(id), { title, description });
+    const flashcardSet = FlashcardSetModel.update(parseInt(id), updateData);
 
     if (!flashcardSet) {
       return NextResponse.json(

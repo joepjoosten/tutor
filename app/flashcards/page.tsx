@@ -15,6 +15,7 @@ interface FlashcardSet {
   id: number;
   title: string;
   description: string | null;
+  flip_mode: number;
   created_at: string;
   flashcards: Flashcard[];
 }
@@ -153,6 +154,27 @@ export default function FlashcardsPage() {
     }
   };
 
+  const toggleFlipMode = async () => {
+    if (!selectedSet) return;
+
+    try {
+      const newFlipMode = selectedSet.flip_mode === 1 ? 0 : 1;
+      const response = await fetch(`/api/flashcard-sets/${selectedSet.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ flip_mode: newFlipMode }),
+      });
+
+      if (response.ok) {
+        const updatedSet = await response.json();
+        setSelectedSet({ ...selectedSet, flip_mode: updatedSet.flip_mode });
+        setSets(prev => prev.map(s => s.id === updatedSet.id ? { ...s, flip_mode: updatedSet.flip_mode } : s));
+      }
+    } catch (error) {
+      console.error('Failed to toggle flip mode:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
@@ -269,12 +291,27 @@ export default function FlashcardsPage() {
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
               {selectedSet.flashcards.length} flashcard{selectedSet.flashcards.length !== 1 ? 's' : ''}
             </p>
+
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedSet.flip_mode === 1}
+                  onChange={toggleFlipMode}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Flip Questions & Answers (show answers as questions)
+                </span>
+              </label>
+            </div>
           </div>
         </div>
 
         <FlashcardViewer
           flashcards={selectedSet.flashcards}
           setId={selectedSet.id}
+          flipMode={selectedSet.flip_mode === 1}
           onUpdate={loadFlashcardSets}
         />
       </div>
