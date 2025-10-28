@@ -31,14 +31,25 @@ export function initDb() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS llm_interactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      image_id INTEGER NOT NULL,
       model TEXT NOT NULL,
       prompt TEXT NOT NULL,
       response TEXT NOT NULL,
       tokens_used INTEGER,
       cost REAL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Junction table - links multiple images to one interaction
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS interaction_images (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      interaction_id INTEGER NOT NULL,
+      image_id INTEGER NOT NULL,
+      order_index INTEGER NOT NULL,
+      FOREIGN KEY (interaction_id) REFERENCES llm_interactions(id) ON DELETE CASCADE,
+      FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE,
+      UNIQUE(interaction_id, image_id)
     )
   `);
 
@@ -69,8 +80,13 @@ export function initDb() {
 
   // Create indexes for better query performance
   db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_llm_interactions_image_id
-    ON llm_interactions(image_id)
+    CREATE INDEX IF NOT EXISTS idx_interaction_images_interaction_id
+    ON interaction_images(interaction_id)
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_interaction_images_image_id
+    ON interaction_images(image_id)
   `);
 
   db.exec(`

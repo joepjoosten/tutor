@@ -168,12 +168,12 @@ Return ONLY the JSON object, no other text.`;
       throw new Error('Invalid flashcard data structure');
     }
 
-    // Save LLM interaction (use first image ID as primary reference)
+    // Save LLM interaction with all images linked
     const llmInteraction = LLMInteractionModel.create({
-      image_id: ids[0],
       model: model,
       prompt: prompt,
       response: response,
+      image_ids: ids,
       tokens_used: completion.usage?.total_tokens,
     });
 

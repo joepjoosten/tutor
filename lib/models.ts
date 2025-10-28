@@ -11,13 +11,19 @@ export interface Image {
 
 export interface LLMInteraction {
   id: number;
-  image_id: number;
   model: string;
   prompt: string;
   response: string;
   tokens_used: number | null;
   cost: number | null;
   created_at: string;
+}
+
+export interface InteractionImage {
+  id: number;
+  interaction_id: number;
+  image_id: number;
+  order_index: number;
 }
 
 export interface FlashcardSet {
@@ -67,26 +73,45 @@ export const ImageModel = {
 // LLM Interaction operations
 export const LLMInteractionModel = {
   create: (data: {
-    image_id: number;
     model: string;
     prompt: string;
     response: string;
+    image_ids: number[];
     tokens_used?: number;
     cost?: number;
   }): LLMInteraction => {
-    const stmt = db.prepare(`
-      INSERT INTO llm_interactions (image_id, model, prompt, response, tokens_used, cost)
-      VALUES (?, ?, ?, ?, ?, ?)
+    const interactionStmt = db.prepare(`
+      INSERT INTO llm_interactions (model, prompt, response, tokens_used, cost)
+      VALUES (?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(
-      data.image_id,
-      data.model,
-      data.prompt,
-      data.response,
-      data.tokens_used ?? null,
-      data.cost ?? null
-    );
-    return LLMInteractionModel.findById(result.lastInsertRowid as number)!;
+
+    const linkStmt = db.prepare(`
+      INSERT INTO interaction_images (interaction_id, image_id, order_index)
+      VALUES (?, ?, ?)
+    `);
+
+    // Use transaction to ensure both interaction and links are created together
+    const transaction = db.transaction(() => {
+      const result = interactionStmt.run(
+        data.model,
+        data.prompt,
+        data.response,
+        data.tokens_used ?? null,
+        data.cost ?? null
+      );
+
+      const interactionId = result.lastInsertRowid as number;
+
+      // Link all images to this interaction
+      data.image_ids.forEach((imageId, index) => {
+        linkStmt.run(interactionId, imageId, index);
+      });
+
+      return interactionId;
+    });
+
+    const interactionId = transaction();
+    return LLMInteractionModel.findById(interactionId)!;
   },
 
   findById: (id: number): LLMInteraction | undefined => {
@@ -95,8 +120,25 @@ export const LLMInteractionModel = {
   },
 
   findByImageId: (imageId: number): LLMInteraction[] => {
-    const stmt = db.prepare('SELECT * FROM llm_interactions WHERE image_id = ? ORDER BY created_at DESC');
+    const stmt = db.prepare(`
+      SELECT DISTINCT llm_interactions.*
+      FROM llm_interactions
+      JOIN interaction_images ON llm_interactions.id = interaction_images.interaction_id
+      WHERE interaction_images.image_id = ?
+      ORDER BY llm_interactions.created_at DESC
+    `);
     return stmt.all(imageId) as LLMInteraction[];
+  },
+
+  getImages: (interactionId: number): Image[] => {
+    const stmt = db.prepare(`
+      SELECT images.*
+      FROM images
+      JOIN interaction_images ON images.id = interaction_images.image_id
+      WHERE interaction_images.interaction_id = ?
+      ORDER BY interaction_images.order_index
+    `);
+    return stmt.all(interactionId) as Image[];
   },
 };
 
