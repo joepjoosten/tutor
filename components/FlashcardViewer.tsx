@@ -42,20 +42,20 @@ export default function FlashcardViewer({ flashcards }: FlashcardViewerProps) {
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
-      <div className="mb-4 text-center text-sm text-gray-600 dark:text-gray-400">
+    <div className="w-full max-w-4xl mx-auto">
+      <div className="mb-6 text-center text-sm font-medium text-gray-600 dark:text-gray-400">
         Card {currentIndex + 1} of {flashcards.length}
       </div>
 
       <div
-        className="relative bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 min-h-[300px] cursor-pointer transform transition-transform hover:scale-102"
+        className="relative bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 min-h-[400px] cursor-pointer transform transition-transform hover:scale-102"
         onClick={toggleAnswer}
       >
         <div className="flex flex-col justify-center items-center h-full">
-          <div className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-4">
+          <div className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-6">
             {showAnswer ? 'ANSWER' : 'QUESTION'}
           </div>
-          <div className="text-lg text-center">
+          <div className="text-3xl md:text-4xl text-center leading-relaxed font-serif">
             {showAnswer ? (
               <div className="whitespace-pre-wrap">{currentCard.answer}</div>
             ) : (

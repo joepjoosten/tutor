@@ -1,6 +1,27 @@
 # Updates - Enhanced Features
 
-## Latest Changes (v4.1)
+## Latest Changes (v4.2)
+
+### Serif Font for Flashcards
+- **Font Family**: Changed question/answer text from sans-serif to `font-serif`
+- **Uses System Fonts**: Georgia (Windows), Times New Roman (fallback)
+- **More Traditional**: Gives flashcards a classic, studious appearance
+- **Better Readability**: Serif fonts are easier to read for longer text
+- **Professional Look**: More like printed study materials
+
+### Larger Flashcard Text
+- **Main Text**: Increased from `text-lg` (18px) to `text-3xl` (30px) on mobile, `text-4xl` (36px) on desktop
+- **Label**: Increased from `text-sm` to `text-xl` and made bold (sans-serif)
+- **Card Counter**: Increased from `text-sm` to `text-lg` with medium font weight
+- **Card Size**: Increased from `min-h-[300px]` to `min-h-[400px]`
+- **Max Width**: Increased from `max-w-2xl` to `max-w-4xl` for more space
+- **Padding**: Increased from `p-8` to `p-12` for better spacing
+- **Leading**: Added `leading-relaxed` for better line spacing
+- **Buttons**: Increased from `px-6 py-2` to `px-8 py-3` with `text-lg`
+- **Navigation Dots**: Increased from `w-8 h-8 text-xs` to `w-12 h-12 text-base`
+- **Spacing**: Increased margins and gaps throughout
+
+## Previous Changes (v4.1)
 
 ### Touch-Friendly Image Cropping
 - **Full Touch Support**: Complete touch event handling for mobile devices
