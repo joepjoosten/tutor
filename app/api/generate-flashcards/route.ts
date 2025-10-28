@@ -71,7 +71,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Prepare prompt for LLM
-    let prompt = `Analyze ${ids.length > 1 ? 'these' : 'this'} homework/study material image${ids.length > 1 ? 's' : ''} and create flashcards to help a student learn the content.`;
+    let prompt = '';
+
+    if (ids.length > 1) {
+      prompt = `You will see ${ids.length} images below. These are all pages from the same homework or study material. Please look at ALL ${ids.length} images carefully before creating flashcards.
+
+Create flashcards to help a student learn the content from ALL the images.`;
+    } else {
+      prompt = `Analyze this homework/study material image and create flashcards to help a student learn the content.`;
+    }
 
     if (customInstructions) {
       prompt += `\n\nSpecial Instructions: ${customInstructions}`;
@@ -92,19 +100,17 @@ Please respond with a JSON object in this exact format:
 }
 
 Guidelines:
-- Create 5-15 flashcards depending on content complexity
+- Create as many flashcards as needed to cover all the important content
 - Questions should be clear and test understanding
 - Answers should be complete but concise
 - Cover key concepts, definitions, formulas, and important facts
 - If there are math problems, include step-by-step solutions in answers
 - Make questions progressively more challenging when appropriate
-- Focus on what a student would need to know for homework/tests
-${ids.length > 1 ? '- Combine content from all images into a cohesive set of flashcards' : ''}
-${customInstructions ? '- Follow the special instructions provided above' : ''}
+- Focus on what a student would need to know for homework/tests${ids.length > 1 ? '\n- Make sure to create flashcards from content in ALL images, not just the first one' : ''}${customInstructions ? '\n- Follow the special instructions provided above' : ''}
 
 Return ONLY the JSON object, no other text.`;
 
-    // Build messages array with all images
+    // Build messages array - put prompt first, then all images
     const messageContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
       {
         type: 'text',
@@ -113,7 +119,8 @@ Return ONLY the JSON object, no other text.`;
     ];
 
     // Add all images to the message
-    for (const img of imageContents) {
+    for (let i = 0; i < imageContents.length; i++) {
+      const img = imageContents[i];
       messageContent.push({
         type: 'image_url',
         image_url: {

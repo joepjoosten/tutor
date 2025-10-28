@@ -1,5 +1,17 @@
 # Updates - Enhanced Features
 
+## Latest Changes (v2)
+
+### Improved Multi-Image Handling
+- **Enhanced Prompt**: LLM now explicitly told to examine ALL images before creating flashcards
+- **Better Instructions**: For multiple images, the prompt clearly states "You will see X images below. Please look at ALL X images carefully"
+- **Emphasis on Coverage**: Added reminder to "create flashcards from content in ALL images, not just the first one"
+
+### Removed Flashcard Limit
+- **No More 5-15 Limit**: Changed from "Create 5-15 flashcards" to "Create as many flashcards as needed to cover all the important content"
+- **Better Coverage**: AI will now create appropriate number of flashcards based on actual content volume
+- **More Comprehensive**: Multi-page homework gets proper coverage without artificial limits
+
 ## New Features Added
 
 ### 1. Multiple Image Upload
