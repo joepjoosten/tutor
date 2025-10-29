@@ -70,7 +70,7 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
       if (response.ok) {
         const data = await response.json();
         const progressMap: StudyProgress = {};
-        data.progress.forEach((p: any) => {
+        data.progress.forEach((p: { flashcard_id: number; dont_know: number }) => {
           if (p.dont_know === 1) {
             progressMap[p.flashcard_id] = true;
           }

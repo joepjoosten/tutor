@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ImageUpload from '@/components/ImageUpload';
 import ModelSelector from '@/components/ModelSelector';
 import FlashcardViewer from '@/components/FlashcardViewer';
@@ -28,10 +28,28 @@ export default function Home() {
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [selectedModel, setSelectedModel] = useState('google/gemini-flash-1.5');
   const [customInstructions, setCustomInstructions] = useState('');
+  const [recentInstructions, setRecentInstructions] = useState<string[]>([]);
   const [generating, setGenerating] = useState(false);
   const [flashcardSet, setFlashcardSet] = useState<FlashcardSet | null>(null);
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch recent custom instructions when component mounts
+  useEffect(() => {
+    const fetchRecentInstructions = async () => {
+      try {
+        const response = await fetch('/api/recent-instructions');
+        if (response.ok) {
+          const data = await response.json();
+          setRecentInstructions(data.instructions);
+        }
+      } catch (err) {
+        console.error('Failed to fetch recent instructions:', err);
+      }
+    };
+
+    fetchRecentInstructions();
+  }, []);
 
   const handleImagesChange = (newImages: UploadedImage[]) => {
     setImages(newImages);
@@ -68,6 +86,19 @@ export default function Home() {
 
       setFlashcardSet(data.flashcardSet);
       setFlashcards(data.flashcards);
+
+      // Refresh recent instructions after successful generation
+      if (customInstructions.trim()) {
+        try {
+          const response = await fetch('/api/recent-instructions');
+          if (response.ok) {
+            const data = await response.json();
+            setRecentInstructions(data.instructions);
+          }
+        } catch (err) {
+          console.error('Failed to refresh recent instructions:', err);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate flashcards');
     } finally {
@@ -121,6 +152,27 @@ export default function Home() {
                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   Provide specific guidance for the AI on what kind of flashcards to create
                 </p>
+
+                {recentInstructions.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                      Recent instructions:
+                    </p>
+                    <div className="space-y-2">
+                      {recentInstructions.map((instruction, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => setCustomInstructions(instruction)}
+                          disabled={generating}
+                          className="w-full px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
+                        >
+                          {instruction}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <button
@@ -192,7 +244,12 @@ export default function Home() {
             </div>
           </div>
 
-          <FlashcardViewer flashcards={flashcards} />
+          <FlashcardViewer
+            flashcards={flashcards}
+            setId={flashcardSet.id}
+            flipMode={false}
+            onUpdate={() => {}}
+          />
 
           <div className="text-center">
             <a

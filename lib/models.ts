@@ -16,6 +16,7 @@ export interface LLMInteraction {
   response: string;
   tokens_used: number | null;
   cost: number | null;
+  custom_instructions: string | null;
   created_at: string;
 }
 
@@ -89,10 +90,11 @@ export const LLMInteractionModel = {
     image_ids: number[];
     tokens_used?: number;
     cost?: number;
+    custom_instructions?: string;
   }): LLMInteraction => {
     const interactionStmt = db.prepare(`
-      INSERT INTO llm_interactions (model, prompt, response, tokens_used, cost)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO llm_interactions (model, prompt, response, tokens_used, cost, custom_instructions)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
 
     const linkStmt = db.prepare(`
@@ -107,7 +109,8 @@ export const LLMInteractionModel = {
         data.prompt,
         data.response,
         data.tokens_used ?? null,
-        data.cost ?? null
+        data.cost ?? null,
+        data.custom_instructions ?? null
       );
 
       const interactionId = result.lastInsertRowid as number;
@@ -150,6 +153,18 @@ export const LLMInteractionModel = {
     `);
     return stmt.all(interactionId) as Image[];
   },
+
+  getRecentCustomInstructions: (limit: number = 3): string[] => {
+    const stmt = db.prepare(`
+      SELECT DISTINCT custom_instructions
+      FROM llm_interactions
+      WHERE custom_instructions IS NOT NULL AND custom_instructions != ''
+      ORDER BY created_at DESC
+      LIMIT ?
+    `);
+    const results = stmt.all(limit) as { custom_instructions: string }[];
+    return results.map(r => r.custom_instructions);
+  },
 };
 
 // Flashcard Set operations
@@ -179,7 +194,7 @@ export const FlashcardSetModel = {
 
   update: (id: number, data: { title?: string; description?: string; flip_mode?: number }): FlashcardSet | undefined => {
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: (string | number | null)[] = [];
 
     if (data.title !== undefined) {
       updates.push('title = ?');

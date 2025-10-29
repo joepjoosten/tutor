@@ -175,6 +175,7 @@ Return ONLY the JSON object, no other text.`;
       response: response,
       image_ids: ids,
       tokens_used: completion.usage?.total_tokens,
+      custom_instructions: customInstructions,
     });
 
     // Create flashcard set

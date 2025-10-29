@@ -121,9 +121,17 @@ export function initDb() {
   `);
 
   // Migrations: Add columns if they don't exist
+  interface ColumnInfo {
+    name: string;
+    type: string;
+    notnull: number;
+    dflt_value: string | null;
+    pk: number;
+  }
+
   try {
-    const flashcardColumns = db.pragma('table_info(flashcards)');
-    const hasDeletedAt = flashcardColumns.some((col: any) => col.name === 'deleted_at');
+    const flashcardColumns = db.pragma('table_info(flashcards)') as ColumnInfo[];
+    const hasDeletedAt = flashcardColumns.some((col) => col.name === 'deleted_at');
 
     if (!hasDeletedAt) {
       db.exec(`ALTER TABLE flashcards ADD COLUMN deleted_at DATETIME`);
@@ -133,14 +141,25 @@ export function initDb() {
   }
 
   try {
-    const setColumns = db.pragma('table_info(flashcard_sets)');
-    const hasFlipMode = setColumns.some((col: any) => col.name === 'flip_mode');
+    const setColumns = db.pragma('table_info(flashcard_sets)') as ColumnInfo[];
+    const hasFlipMode = setColumns.some((col) => col.name === 'flip_mode');
 
     if (!hasFlipMode) {
       db.exec(`ALTER TABLE flashcard_sets ADD COLUMN flip_mode INTEGER DEFAULT 0`);
     }
   } catch (error) {
     console.log('Flashcard set migration check:', error);
+  }
+
+  try {
+    const interactionColumns = db.pragma('table_info(llm_interactions)') as ColumnInfo[];
+    const hasCustomInstructions = interactionColumns.some((col) => col.name === 'custom_instructions');
+
+    if (!hasCustomInstructions) {
+      db.exec(`ALTER TABLE llm_interactions ADD COLUMN custom_instructions TEXT`);
+    }
+  } catch (error) {
+    console.log('LLM interaction migration check:', error);
   }
 }
 
