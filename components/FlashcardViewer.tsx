@@ -36,10 +36,25 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
   const [randomize, setRandomize] = useState(false);
   const [showDontKnowOnly, setShowDontKnowOnly] = useState(false);
   const [randomSeed, setRandomSeed] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Detect iOS and PWA mode
+  const isIOS = () => {
+    if (typeof window === 'undefined') return false;
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  };
+
+  const isPWA = () => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(display-mode: standalone)').matches ||
+           (window.navigator as { standalone?: boolean }).standalone === true;
+  };
 
   // Load study progress
   useEffect(() => {
     loadStudyProgress();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setId]);
 
   // Initialize display order when flashcards or filters change
@@ -62,7 +77,23 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
     if (cardsToShow.length > 0 && currentIndex >= cardsToShow.length) {
       setCurrentIndex(Math.max(0, cardsToShow.length - 1));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flashcards, randomize, showDontKnowOnly, randomSeed]);
+
+  // Listen for fullscreen changes (e.g., user presses ESC)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      // Only update state from API if not iOS PWA
+      if (!isIOS() || !isPWA()) {
+        setIsFullscreen(!!document.fullscreenElement);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   const loadStudyProgress = async () => {
     try {
@@ -188,6 +219,43 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
     }
   };
 
+  const enterFullscreen = async () => {
+    // For iOS in PWA mode, just toggle state - no Fullscreen API needed
+    if (isIOS() && isPWA()) {
+      setIsFullscreen(true);
+      return;
+    }
+
+    // For other browsers, use Fullscreen API
+    try {
+      await document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } catch (error) {
+      console.error('Failed to enter fullscreen:', error);
+      // Fallback to state-based fullscreen if API fails
+      setIsFullscreen(true);
+    }
+  };
+
+  const exitFullscreen = async () => {
+    // For iOS in PWA mode, just toggle state
+    if (isIOS() && isPWA()) {
+      setIsFullscreen(false);
+      return;
+    }
+
+    // For other browsers, exit fullscreen API
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+      setIsFullscreen(false);
+    } catch (error) {
+      console.error('Failed to exit fullscreen:', error);
+      setIsFullscreen(false);
+    }
+  };
+
   const startEditing = () => {
     setEditedQuestion(currentCard.question);
     setEditedAnswer(currentCard.answer);
@@ -295,6 +363,185 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
 
   const dontKnowCount = Object.values(dontKnowCards).filter(v => v).length;
 
+  // Fullscreen mode - minimal UI with just card, buttons, and progress
+  if (isFullscreen) {
+    return (
+      <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-between p-8 z-50" style={{
+        paddingTop: 'max(2rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+        paddingLeft: 'max(2rem, env(safe-area-inset-left))',
+        paddingRight: 'max(2rem, env(safe-area-inset-right))',
+      }}>
+        {/* Progress indicator at top */}
+        <div className="w-full flex justify-between items-center">
+          <div className="text-white text-lg font-medium">
+            Card {currentIndex + 1} of {visibleCards.length}
+            {dontKnowCount > 0 && (
+              <span className="ml-3 text-red-400">
+                ({dontKnowCount} to review)
+              </span>
+            )}
+          </div>
+          <button
+            onClick={exitFullscreen}
+            className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+            title="Exit fullscreen"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        {/* Flashcard in center */}
+        <div
+          className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-16 max-w-4xl w-full cursor-pointer transform transition-transform hover:scale-102"
+          onClick={toggleAnswer}
+        >
+          {dontKnowCards[currentCard.id] && (
+            <div className="absolute top-6 right-6 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-full">
+              Need to review
+            </div>
+          )}
+
+          <div className="flex flex-col justify-center items-center h-full min-h-[400px]">
+            <div className="text-base font-medium text-blue-600 dark:text-blue-400 mb-8">
+              {flipMode ? (
+                showAnswer ? 'QUESTION' : 'ANSWER'
+              ) : (
+                showAnswer ? 'ANSWER' : 'QUESTION'
+              )}
+            </div>
+            <div className="text-4xl md:text-5xl text-center leading-relaxed font-serif">
+              {showAnswer ? (
+                <div className="whitespace-pre-wrap">{getDisplayAnswer()}</div>
+              ) : (
+                <div className="whitespace-pre-wrap">{getDisplayQuestion()}</div>
+              )}
+            </div>
+          </div>
+
+          <div className="absolute bottom-6 right-6 text-sm text-gray-400">
+            Click to flip
+          </div>
+        </div>
+
+        {/* Control buttons at bottom */}
+        <div className="flex justify-center items-center w-full gap-3">
+          <button
+            onClick={prevCard}
+            disabled={visibleCards.length <= 1}
+            className="p-4 bg-gray-700 text-white rounded-full hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-lg"
+            title="Previous card"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-7 w-7"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+          </button>
+
+          <button
+            onClick={toggleAnswer}
+            className="p-4 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors shadow-lg"
+            title={showAnswer ? 'Show question' : 'Show answer'}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-7 w-7"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          </button>
+
+          <button
+            onClick={toggleDontKnow}
+            className={`p-4 rounded-full transition-colors shadow-lg ${
+              dontKnowCards[currentCard.id]
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-red-600 text-white hover:bg-red-700'
+            }`}
+            title={dontKnowCards[currentCard.id] ? 'Mark as known' : "Mark as don't know"}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-7 w-7"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              {dontKnowCards[currentCard.id] ? (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2.5}
+                  d="M5 13l4 4L19 7"
+                />
+              ) : (
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2.5}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              )}
+            </svg>
+          </button>
+
+          <button
+            onClick={nextCard}
+            disabled={visibleCards.length <= 1}
+            className="p-4 bg-gray-700 text-white rounded-full hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-lg"
+            title="Next card"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-7 w-7"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-4xl mx-auto">
       <div className="mb-6 flex justify-between items-center flex-wrap gap-2">
@@ -355,6 +602,26 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
             }`}
           >
             {editMode ? 'Study Mode' : 'Edit Mode'}
+          </button>
+          <button
+            onClick={enterFullscreen}
+            className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-sm"
+            title="Fullscreen mode"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+              />
+            </svg>
           </button>
         </div>
       </div>
