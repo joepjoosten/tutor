@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_CONVEX_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_CONVEX_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_DISABLE_GOOGLE_AUTH: "true"
+      BETTER_AUTH_SECRET: ci-better-auth-secret-with-at-least-32-characters
+      AI_KEY_ENCRYPTION_SECRET: ci-encryption-secret-with-at-least-32-chars
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build

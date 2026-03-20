@@ -1,211 +1,94 @@
-# Tutor App - AI Homework Flashcard Generator
+# Tutor App
 
-A Next.js application that helps students study by automatically generating flashcards from homework images using AI vision models.
+Tutor is a Next.js study app that turns homework images into flashcards. It now uses:
 
-## Features
+- Convex for database, file storage, and backend functions
+- Convex-managed Better Auth for auth
+- Per-user encrypted OpenRouter API keys for AI generation
+- Vercel-native deployment with Convex deployment during build
 
-- **Image Cropping**: Crop each image before uploading to focus on relevant content
-- **Camera Support**: Take photos directly from your mobile device or upload from files
-- **Automatic Compression**: Images are automatically compressed to ~1MB for faster processing
-- **Multiple Image Upload**: Upload one or more images at once before generating flashcards
-- **Custom Instructions**: Add specific guidance for the AI (e.g., "Focus on vocabulary", "Include step-by-step solutions")
-- **Manual Submit**: Review uploaded images and instructions before generating
-- **AI Analysis**: Uses vision-capable models via OpenRouter to analyze homework content
-- **Smart Flashcard Generation**: Automatically creates questions and answers from images
-- **Interactive Viewer**: Flip animations and easy navigation between cards
-- **Persistent Storage**: Local SQLite database for all flashcard sets
-- **Multiple AI Models**: Support for GPT-4, Claude, Gemini, and more
-- **No Login Required**: Runs completely locally on your machine
+## Local development
 
-## Tech Stack
-
-- **Framework**: Next.js 15 with TypeScript
-- **Styling**: Tailwind CSS
-- **Database**: SQLite (better-sqlite3)
-- **AI**: OpenRouter API (supports multiple LLM providers)
-- **File Handling**: Next.js API routes with FormData
-
-## Setup Instructions
-
-### 1. Prerequisites
-
-- Node.js 18+ installed
-- OpenRouter API key (get one at https://openrouter.ai/)
-
-### 2. Installation
+1. Install dependencies:
 
 ```bash
-# Dependencies are already installed, but if needed:
 npm install
 ```
 
-### 3. Environment Configuration
-
-Create a `.env` file in the root directory:
+2. Start Convex locally:
 
 ```bash
-cp .env.example .env
+npm run dev:backend
 ```
 
-Edit `.env` and add your OpenRouter API key:
+This creates `.env.local` with local Convex URLs the first time it runs.
 
-```
-OPENROUTER_API_KEY=your_actual_api_key_here
+3. Copy the env template and fill in the auth/app secrets you need:
+
+```bash
+cp .env.example .env.local
 ```
 
-### 4. Run the Development Server
+Required for normal auth flows:
+
+- `SITE_URL`
+- `BETTER_AUTH_SECRET`
+- `AI_KEY_ENCRYPTION_SECRET`
+
+Required for Google auth:
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+
+4. Start the Next.js app:
 
 ```bash
 npm run dev
 ```
 
-The app will be available at http://localhost:3000
+## User-owned AI keys
 
-## Usage
+Users bring their own OpenRouter key in the Settings page. The key is:
 
-### Creating Flashcards
+- stored per authenticated user
+- encrypted before it is written to Convex
+- only decrypted inside the flashcard generation action
 
-1. Go to the home page
-2. Click to upload images or take photos
-   - **On Mobile**: Camera will open to take photos directly
-   - **On Desktop**: Select image files from your computer
-   - You can select multiple images at once
-3. **Crop each image**:
-   - A crop tool will appear for each image
-   - Drag inside the blue rectangle to move the crop area
-   - Drag corners to resize the crop area
-   - Click "Crop & Continue" or "Cancel" to skip
-4. Add more images if needed by clicking upload again
-5. Review the uploaded images (remove any with the X button)
-   - Images over 1MB are automatically compressed after cropping
-6. Select an AI model from the dropdown
-7. (Optional) Add custom instructions in the textarea
-   - Example: "Focus on vocabulary words"
-   - Example: "Include step-by-step math solutions"
-   - Example: "Make questions appropriate for a 5th grader"
-8. Click "Generate Flashcards from X Image(s)"
-9. Wait 10-30 seconds for the AI to analyze and create flashcards
-10. Review your generated flashcards
+## Deployment
 
-### Studying Flashcards
+This repo is set up for Vercel-native deploys.
 
-1. Click "My Flashcards" in the navigation
-2. Browse your saved flashcard sets
-3. Click "Study" on any set
-4. Click cards to flip between questions and answers
-5. Use Previous/Next buttons or number buttons to navigate
+- Production branch: `main`
+- Vercel build command: `npx convex deploy --cmd 'npm run build'`
+- `vercel.json` already includes that build command
+- GitHub Actions is used for CI checks only, not deploys
 
-### Managing Sets
+### Required Vercel environment variables
 
-- Delete unwanted sets using the trash icon
-- Sets are stored locally in SQLite database
+- `CONVEX_DEPLOY_KEY`
+- `NEXT_PUBLIC_CONVEX_URL`
+- `NEXT_PUBLIC_CONVEX_SITE_URL`
+- `SITE_URL`
+- `BETTER_AUTH_SECRET`
+- `AI_KEY_ENCRYPTION_SECRET`
+- `NEXT_PUBLIC_DISABLE_GOOGLE_AUTH`
 
-## Project Structure
+Production-only if using Google:
 
-```
-tutor/
-├── app/
-│   ├── api/
-│   │   ├── upload/              # Image upload endpoint
-│   │   ├── generate-flashcards/ # Flashcard generation endpoint
-│   │   └── flashcard-sets/      # CRUD operations for sets
-│   ├── flashcards/              # Flashcard management page
-│   ├── layout.tsx               # Root layout with navigation
-│   ├── page.tsx                 # Home page (upload & generate)
-│   └── globals.css              # Global styles
-├── components/
-│   ├── ImageUpload.tsx          # Image upload component
-│   ├── ModelSelector.tsx        # AI model selection
-│   └── FlashcardViewer.tsx      # Interactive flashcard display
-├── lib/
-│   ├── db.ts                    # SQLite database setup
-│   └── models.ts                # Database models and operations
-├── public/
-│   └── uploads/                 # Uploaded images (gitignored)
-└── data/
-    └── tutor.db                 # SQLite database (gitignored)
-```
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
 
-## Database Schema
+Optional if you later add email reset / verification emails:
 
-### Images
-Stores uploaded image files and metadata
+- `RESEND_API_KEY`
+- `AUTH_FROM_EMAIL`
 
-### LLM Interactions
-Logs all API calls to OpenRouter with prompts and responses
+## CI
 
-### Flashcard Sets
-Groups of related flashcards with title and description
+`.github/workflows/ci.yml` runs:
 
-### Flashcards
-Individual question/answer pairs
+- `npm ci`
+- `npm run lint`
+- `npm run build`
 
-## Available AI Models
-
-The app supports various models through OpenRouter:
-
-- **Gemini Flash 1.5** - Fast and affordable, good for most tasks
-- **Gemini Pro 1.5** - More capable for complex materials
-- **Claude 3.5 Sonnet** - Excellent reasoning and analysis
-- **Claude 3 Haiku** - Fast and cost-effective
-- **GPT-4 Omni** - OpenAI's flagship multimodal model
-- **GPT-4 Omni Mini** - Faster, more affordable variant
-
-Different models have different costs and capabilities. Choose based on your needs and budget.
-
-## API Endpoints
-
-### POST /api/upload
-Upload an image file
-- Accepts: FormData with 'file' field
-- Returns: Image metadata and ID
-
-### POST /api/generate-flashcards
-Generate flashcards from an image
-- Body: `{ imageId: number, model: string }`
-- Returns: Flashcard set with all cards
-
-### GET /api/flashcard-sets
-Get all flashcard sets with their cards
-
-### DELETE /api/flashcard-sets?id={id}
-Delete a specific flashcard set
-
-## Development
-
-### Build for Production
-
-```bash
-npm run build
-npm start
-```
-
-### Linting
-
-```bash
-npm run lint
-```
-
-## Notes
-
-- All data is stored locally in SQLite
-- Images are stored in `public/uploads/`
-- No authentication/users - single-user app
-- Database is automatically created on first run
-- Image files are deduplicated using MD5 hashes
-
-## Future Enhancements
-
-Potential features to add:
-- Spaced repetition algorithm
-- Progress tracking and statistics
-- Export flashcards to Anki format
-- Support for multiple users
-- Bulk image upload
-- OCR text extraction
-- Audio pronunciation for language learning
-- Collaborative studying features
-
-## License
-
-MIT
+on pull requests and non-`main` pushes.

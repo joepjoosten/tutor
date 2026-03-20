@@ -1,83 +1,99 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useMutation, useQuery } from 'convex/react';
+import type { Id } from '@/convex/_generated/dataModel';
+import { api } from '@/convex/_generated/api';
+import { authClient } from '@/lib/auth-client';
+import AuthCard from '@/components/AuthCard';
 import FlashcardViewer from '@/components/FlashcardViewer';
 
 interface Flashcard {
-  id: number;
+  id: Id<'flashcards'>;
   question: string;
   answer: string;
   order_index: number;
 }
 
 interface FlashcardSet {
-  id: number;
+  id: Id<'flashcardSets'>;
   title: string;
   description: string | null;
-  flip_mode: number;
-  created_at: string;
+  flip_mode: boolean;
+  created_at: number;
   flashcards: Flashcard[];
 }
 
+function mapSet(set: {
+  _id: Id<'flashcardSets'>;
+  title: string;
+  description?: string;
+  flipMode: boolean;
+  createdAt: number;
+  flashcards: Array<{
+    _id: Id<'flashcards'>;
+    question: string;
+    answer: string;
+    orderIndex: number;
+  }>;
+}): FlashcardSet {
+  return {
+    id: set._id,
+    title: set.title,
+    description: set.description ?? null,
+    flip_mode: set.flipMode,
+    created_at: set.createdAt,
+    flashcards: set.flashcards.map((card) => ({
+      id: card._id,
+      question: card.question,
+      answer: card.answer,
+      order_index: card.orderIndex,
+    })),
+  };
+}
+
 export default function FlashcardsPage() {
-  const [sets, setSets] = useState<FlashcardSet[]>([]);
-  const [selectedSet, setSelectedSet] = useState<FlashcardSet | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const rawSets = useQuery(api.flashcards.listFlashcardSets, session ? {} : 'skip');
+  const deleteSet = useMutation(api.flashcards.deleteFlashcardSet);
+  const updateSet = useMutation(api.flashcards.updateFlashcardSet);
+
+  const [selectedSetId, setSelectedSetId] = useState<Id<'flashcardSets'> | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedDescription, setEditedDescription] = useState('');
 
-  useEffect(() => {
-    loadFlashcardSets();
-  }, []);
+  const sets = useMemo(() => (rawSets ?? []).map(mapSet), [rawSets]);
+  const selectedSet = useMemo(
+    () => sets.find((set: FlashcardSet) => set.id === selectedSetId) ?? null,
+    [selectedSetId, sets]
+  );
 
-  const loadFlashcardSets = async () => {
-    try {
-      const response = await fetch('/api/flashcard-sets');
-      const data = await response.json();
+  const loading = sessionPending || (session ? rawSets === undefined : false);
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to load flashcard sets');
-      }
-
-      setSets(data.sets);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load flashcard sets');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteSet = async (id: number) => {
+  const handleDeleteSet = async (id: Id<'flashcardSets'>) => {
     if (!confirm('Are you sure you want to delete this flashcard set?')) {
       return;
     }
 
     try {
-      const response = await fetch(`/api/flashcard-sets?id=${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete flashcard set');
+      await deleteSet({ setId: id });
+      if (selectedSetId === id) {
+        setSelectedSetId(null);
       }
-
-      // Remove from local state
-      setSets(sets.filter((set) => set.id !== id));
-      if (selectedSet?.id === id) {
-        setSelectedSet(null);
-      }
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete flashcard set');
+    } catch (caughtError) {
+      alert(
+        caughtError instanceof Error
+          ? caughtError.message
+          : 'Failed to delete flashcard set'
+      );
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -102,18 +118,11 @@ export default function FlashcardsPage() {
     if (!selectedSet || !editedTitle.trim()) return;
 
     try {
-      const response = await fetch(`/api/flashcard-sets/${selectedSet.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: editedTitle, description: selectedSet.description }),
+      await updateSet({
+        setId: selectedSet.id,
+        title: editedTitle.trim(),
       });
-
-      if (response.ok) {
-        const updatedSet = await response.json();
-        setSelectedSet({ ...selectedSet, title: updatedSet.title });
-        setSets(prev => prev.map(s => s.id === updatedSet.id ? { ...s, title: updatedSet.title } : s));
-        setIsEditingTitle(false);
-      }
+      setIsEditingTitle(false);
     } catch (error) {
       console.error('Failed to update set title:', error);
       alert('Failed to update set title');
@@ -136,18 +145,11 @@ export default function FlashcardsPage() {
     if (!selectedSet) return;
 
     try {
-      const response = await fetch(`/api/flashcard-sets/${selectedSet.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: selectedSet.title, description: editedDescription.trim() || undefined }),
+      await updateSet({
+        setId: selectedSet.id,
+        description: editedDescription.trim() || null,
       });
-
-      if (response.ok) {
-        const updatedSet = await response.json();
-        setSelectedSet({ ...selectedSet, description: updatedSet.description });
-        setSets(prev => prev.map(s => s.id === updatedSet.id ? { ...s, description: updatedSet.description } : s));
-        setIsEditingDescription(false);
-      }
+      setIsEditingDescription(false);
     } catch (error) {
       console.error('Failed to update set description:', error);
       alert('Failed to update set description');
@@ -158,18 +160,10 @@ export default function FlashcardsPage() {
     if (!selectedSet) return;
 
     try {
-      const newFlipMode = selectedSet.flip_mode === 1 ? 0 : 1;
-      const response = await fetch(`/api/flashcard-sets/${selectedSet.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ flip_mode: newFlipMode }),
+      await updateSet({
+        setId: selectedSet.id,
+        flipMode: !selectedSet.flip_mode,
       });
-
-      if (response.ok) {
-        const updatedSet = await response.json();
-        setSelectedSet({ ...selectedSet, flip_mode: updatedSet.flip_mode });
-        setSets(prev => prev.map(s => s.id === updatedSet.id ? { ...s, flip_mode: updatedSet.flip_mode } : s));
-      }
     } catch (error) {
       console.error('Failed to toggle flip mode:', error);
     }
@@ -186,12 +180,18 @@ export default function FlashcardsPage() {
     );
   }
 
-  if (error) {
+  if (!session) {
     return (
-      <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <div className="text-center py-12">
-          <div className="text-red-600 dark:text-red-400">Error: {error}</div>
+      <div className="max-w-5xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <div className="text-center mb-10">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">
+            Sign in to see your flashcards
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            Your sets and study progress are private to your account.
+          </p>
         </div>
+        <AuthCard />
       </div>
     );
   }
@@ -201,7 +201,7 @@ export default function FlashcardsPage() {
       <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
           <button
-            onClick={() => setSelectedSet(null)}
+            onClick={() => setSelectedSetId(null)}
             className="text-blue-600 dark:text-blue-400 hover:underline mb-4"
           >
             ← Back to all sets
@@ -217,7 +217,7 @@ export default function FlashcardsPage() {
                 />
                 <div className="flex gap-2 mt-2">
                   <button
-                    onClick={saveTitle}
+                    onClick={() => void saveTitle()}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                   >
                     Save
@@ -253,7 +253,7 @@ export default function FlashcardsPage() {
                 />
                 <div className="flex gap-2 mt-2">
                   <button
-                    onClick={saveDescription}
+                    onClick={() => void saveDescription()}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                   >
                     Save
@@ -296,8 +296,8 @@ export default function FlashcardsPage() {
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={selectedSet.flip_mode === 1}
-                  onChange={toggleFlipMode}
+                  checked={selectedSet.flip_mode}
+                  onChange={() => void toggleFlipMode()}
                   className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                 />
                 <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -311,8 +311,8 @@ export default function FlashcardsPage() {
         <FlashcardViewer
           flashcards={selectedSet.flashcards}
           setId={selectedSet.id}
-          flipMode={selectedSet.flip_mode === 1}
-          onUpdate={loadFlashcardSets}
+          flipMode={selectedSet.flip_mode}
+          onUpdate={() => {}}
         />
       </div>
     );
@@ -347,7 +347,7 @@ export default function FlashcardsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sets.map((set) => (
+          {sets.map((set: FlashcardSet) => (
             <div
               key={set.id}
               className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden"
@@ -367,13 +367,13 @@ export default function FlashcardsPage() {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setSelectedSet(set)}
+                    onClick={() => setSelectedSetId(set.id)}
                     className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                   >
                     Study
                   </button>
                   <button
-                    onClick={() => handleDeleteSet(set.id)}
+                    onClick={() => void handleDeleteSet(set.id)}
                     className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
                     title="Delete set"
                   >
