@@ -72,9 +72,10 @@ Users bring their own OpenRouter key in the Settings page. The key is:
 This repo is set up for Vercel-native deploys.
 
 - Production branch: `main`
-- Vercel build command: `npx convex deploy --cmd 'npm run build'`
+- Vercel build command: `npx convex deploy && npm run build`
 - `vercel.json` already includes that build command
 - GitHub Actions is used for CI checks only, not deploys
+- `CONVEX_DEPLOY_KEY` should be scoped to the Vercel Production environment only unless you intentionally set up Convex preview deployments
 
 ### Required Vercel environment variables
 
