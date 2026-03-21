@@ -106,6 +106,30 @@ export const updateFlashcardSet = mutation({
   },
 });
 
+export const createFlashcardSet = mutation({
+  args: {
+    title: v.string(),
+    description: v.optional(v.union(v.string(), v.null())),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx);
+    const title = args.title.trim();
+    if (!title) {
+      throw new Error("Title is required.");
+    }
+
+    const setId = await ctx.db.insert("flashcardSets", {
+      userId,
+      title,
+      description: args.description?.trim() || undefined,
+      flipMode: false,
+      createdAt: Date.now(),
+    });
+
+    return ctx.db.get(setId);
+  },
+});
+
 export const deleteFlashcardSet = mutation({
   args: {
     setId: v.id("flashcardSets"),

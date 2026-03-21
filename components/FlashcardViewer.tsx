@@ -121,25 +121,6 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
 
   const visibleCards = getVisibleCards();
 
-  if (visibleCards.length === 0) {
-    return (
-      <div className="text-center py-8 text-gray-500">
-        {showDontKnowOnly ? 'No cards marked as "don\'t know"' : 'No flashcards available'}
-      </div>
-    );
-  }
-
-  const currentCard = visibleCards[displayOrder[currentIndex] || 0];
-
-  // Safety check - if currentCard is undefined, return loading state
-  if (!currentCard) {
-    return (
-      <div className="text-center py-8 text-gray-500">
-        Loading...
-      </div>
-    );
-  }
-
   const nextCard = () => {
     setShowAnswer(false);
     setCurrentIndex((prev) => (prev + 1) % visibleCards.length);
@@ -340,6 +321,100 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
       alert('Failed to create flashcard');
     }
   };
+
+  const addFlashcardForm = (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
+      <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Add New Flashcard</h3>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Question
+          </label>
+          <textarea
+            value={newQuestion}
+            onChange={(e) => setNewQuestion(e.target.value)}
+            placeholder="Enter the question..."
+            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[100px] resize-y"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Answer
+          </label>
+          <textarea
+            value={newAnswer}
+            onChange={(e) => setNewAnswer(e.target.value)}
+            placeholder="Enter the answer..."
+            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[100px] resize-y"
+          />
+        </div>
+
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={cancelAdding}
+            className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={saveNew}
+            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            Add Flashcard
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (visibleCards.length === 0) {
+    return (
+      <div className="w-full max-w-4xl mx-auto">
+        {isAdding ? (
+          addFlashcardForm
+        ) : (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-10 text-center">
+            <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-3">
+              {showDontKnowOnly ? 'No cards marked for review' : 'This set is empty'}
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              {showDontKnowOnly
+                ? 'Switch back to all cards or add a new flashcard.'
+                : 'Create the first flashcard in this set without uploading any images.'}
+            </p>
+            <div className="flex justify-center gap-3 flex-wrap">
+              {showDontKnowOnly && flashcards.length > 0 && (
+                <button
+                  onClick={() => setShowDontKnowOnly(false)}
+                  className="px-5 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Show All Cards
+                </button>
+              )}
+              <button
+                onClick={startAdding}
+                className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                {flashcards.length === 0 ? 'Add First Flashcard' : 'Add Flashcard'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const currentCard = visibleCards[displayOrder[currentIndex] || 0];
+
+  if (!currentCard) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        Loading...
+      </div>
+    );
+  }
 
   const getDisplayQuestion = () => flipMode ? currentCard.answer : currentCard.question;
   const getDisplayAnswer = () => flipMode ? currentCard.question : currentCard.answer;
@@ -653,50 +728,7 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
           </div>
         </div>
       ) : isAdding ? (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
-          <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Add New Flashcard</h3>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Question
-              </label>
-              <textarea
-                value={newQuestion}
-                onChange={(e) => setNewQuestion(e.target.value)}
-                placeholder="Enter the question..."
-                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[100px] resize-y"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Answer
-              </label>
-              <textarea
-                value={newAnswer}
-                onChange={(e) => setNewAnswer(e.target.value)}
-                placeholder="Enter the answer..."
-                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[100px] resize-y"
-              />
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={cancelAdding}
-                className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveNew}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                Add Flashcard
-              </button>
-            </div>
-          </div>
-        </div>
+        addFlashcardForm
       ) : (
         <div
           className="relative bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 min-h-[400px] cursor-pointer transform transition-transform hover:scale-102"
