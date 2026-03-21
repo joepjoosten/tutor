@@ -35,10 +35,23 @@ Required for normal auth flows:
 - `BETTER_AUTH_SECRET`
 - `AI_KEY_ENCRYPTION_SECRET`
 
+For local development, the app falls back to local-only secrets if those values
+are still left as the `.env.example` placeholders. Production still requires
+real secrets.
+
 Required for Google auth:
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
+- set `NEXT_PUBLIC_DISABLE_GOOGLE_AUTH=false`
+
+For local Convex development, set Google secrets on the Convex dev deployment
+too, because the auth provider is registered from the Convex backend:
+
+```bash
+npx convex env set GOOGLE_CLIENT_ID your_google_client_id
+npx convex env set GOOGLE_CLIENT_SECRET your_google_client_secret
+```
 
 4. Start the Next.js app:
 

@@ -14,7 +14,7 @@ export default function AuthCard() {
   const [error, setError] = useState<string | null>(null);
 
   const googleEnabled =
-    process.env.NEXT_PUBLIC_DISABLE_GOOGLE_AUTH !== "true";
+    process.env.NEXT_PUBLIC_DISABLE_GOOGLE_AUTH === "false";
   const isSignUp = mode === "sign-up";
   const callbackURL = useMemo(
     () => (typeof window === "undefined" ? "/" : window.location.origin),

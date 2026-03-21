@@ -1,5 +1,6 @@
 import type { GenericCtx } from "@convex-dev/better-auth";
 import type { DataModel } from "./_generated/dataModel";
+import { getEncryptionSecret } from "./env";
 
 export async function requireUser(ctx: GenericCtx<DataModel>) {
   const identity = await ctx.auth.getUserIdentity();
@@ -7,14 +8,6 @@ export async function requireUser(ctx: GenericCtx<DataModel>) {
     throw new Error("You must be signed in.");
   }
   return identity.subject;
-}
-
-export function getEncryptionSecret() {
-  const secret = process.env.AI_KEY_ENCRYPTION_SECRET;
-  if (!secret) {
-    throw new Error("AI_KEY_ENCRYPTION_SECRET is not configured.");
-  }
-  return secret;
 }
 
 function bytesToBase64(bytes: Uint8Array) {
