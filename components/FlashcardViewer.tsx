@@ -1,9 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useMutation, useQuery } from 'convex/react';
+import type { Id } from '@/convex/_generated/dataModel';
+import { api } from '@/convex/_generated/api';
 
 interface Flashcard {
-  id: number;
+  id: Id<'flashcards'>;
   question: string;
   answer: string;
   order_index: number;
@@ -11,16 +14,22 @@ interface Flashcard {
 
 interface FlashcardViewerProps {
   flashcards: Flashcard[];
-  setId: number;
+  setId: Id<'flashcardSets'>;
   flipMode: boolean;
   onUpdate: () => void;
 }
 
 interface StudyProgress {
-  [flashcardId: number]: boolean;
+  [flashcardId: string]: boolean;
 }
 
 export default function FlashcardViewer({ flashcards: initialFlashcards, setId, flipMode, onUpdate }: FlashcardViewerProps) {
+  const studyProgress = useQuery(api.flashcards.getStudyProgress, { setId });
+  const markStudyProgress = useMutation(api.flashcards.markStudyProgress);
+  const resetStudyProgress = useMutation(api.flashcards.resetStudyProgress);
+  const updateFlashcard = useMutation(api.flashcards.updateFlashcard);
+  const deleteFlashcard = useMutation(api.flashcards.deleteFlashcard);
+  const createFlashcard = useMutation(api.flashcards.createFlashcard);
   const [flashcards, setFlashcards] = useState(initialFlashcards);
   const [displayOrder, setDisplayOrder] = useState<number[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -51,11 +60,19 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
            (window.navigator as { standalone?: boolean }).standalone === true;
   };
 
-  // Load study progress
   useEffect(() => {
-    loadStudyProgress();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setId]);
+    setFlashcards(initialFlashcards);
+  }, [initialFlashcards]);
+
+  useEffect(() => {
+    const progressMap: StudyProgress = {};
+    studyProgress?.forEach((item: { flashcardId: Id<'flashcards'>; dontKnow: boolean }) => {
+      if (item.dontKnow) {
+        progressMap[item.flashcardId] = true;
+      }
+    });
+    setDontKnowCards(progressMap);
+  }, [studyProgress]);
 
   // Initialize display order when flashcards or filters change
   useEffect(() => {
@@ -94,24 +111,6 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, []);
-
-  const loadStudyProgress = async () => {
-    try {
-      const response = await fetch(`/api/study-progress?setId=${setId}`);
-      if (response.ok) {
-        const data = await response.json();
-        const progressMap: StudyProgress = {};
-        data.progress.forEach((p: { flashcard_id: number; dont_know: number }) => {
-          if (p.dont_know === 1) {
-            progressMap[p.flashcard_id] = true;
-          }
-        });
-        setDontKnowCards(progressMap);
-      }
-    } catch (error) {
-      console.error('Failed to load study progress:', error);
-    }
-  };
 
   const getVisibleCards = () => {
     if (showDontKnowOnly) {
@@ -161,41 +160,29 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
     const isNowKnown = wasMarked && !newState;
 
     try {
-      const response = await fetch('/api/study-progress', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          setId,
-          flashcardId: currentCard.id,
-          dontKnow: newState,
-        }),
+      await markStudyProgress({
+        setId,
+        flashcardId: currentCard.id,
+        dontKnow: newState,
       });
 
-      if (response.ok) {
-        // Update the state
-        setDontKnowCards(prev => ({
-          ...prev,
-          [currentCard.id]: newState,
-        }));
+      setDontKnowCards(prev => ({
+        ...prev,
+        [currentCard.id]: newState,
+      }));
 
-        // If in review mode and marking as "know", handle navigation carefully
-        if (showDontKnowOnly && isNowKnown) {
-          const remainingCards = visibleCards.filter(card =>
-            card.id === currentCard.id ? false : dontKnowCards[card.id]
-          );
+      if (showDontKnowOnly && isNowKnown) {
+        const remainingCards = visibleCards.filter(card =>
+          card.id === currentCard.id ? false : dontKnowCards[card.id]
+        );
 
-          if (remainingCards.length === 0) {
-            // No more cards to review - stay on current (will show "no cards" message)
-            setCurrentIndex(0);
-          } else if (currentIndex >= remainingCards.length) {
-            // Current index will be out of bounds, go to last card
-            setCurrentIndex(remainingCards.length - 1);
-          }
-          // else: stay at current index (will show next card in the list)
-        } else {
-          // Normal mode: just go to next card
-          nextCard();
+        if (remainingCards.length === 0) {
+          setCurrentIndex(0);
+        } else if (currentIndex >= remainingCards.length) {
+          setCurrentIndex(remainingCards.length - 1);
         }
+      } else {
+        nextCard();
       }
     } catch (error) {
       console.error('Failed to update study progress:', error);
@@ -206,13 +193,8 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
     if (!confirm('Are you sure you want to reset all study progress?')) return;
 
     try {
-      const response = await fetch(`/api/study-progress?setId=${setId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setDontKnowCards({});
-      }
+      await resetStudyProgress({ setId });
+      setDontKnowCards({});
     } catch (error) {
       console.error('Failed to reset progress:', error);
       alert('Failed to reset progress');
@@ -271,23 +253,26 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
 
   const saveEdit = async () => {
     try {
-      const response = await fetch(`/api/flashcards/${currentCard.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: editedQuestion,
-          answer: editedAnswer,
-        }),
+      const updatedCard = await updateFlashcard({
+        flashcardId: currentCard.id,
+        question: editedQuestion,
+        answer: editedAnswer,
       });
-
-      if (response.ok) {
-        const updatedCard = await response.json();
-        setFlashcards(prev => prev.map(card =>
-          card.id === updatedCard.id ? updatedCard : card
-        ));
-        setIsEditing(false);
-        onUpdate();
+      if (!updatedCard) {
+        throw new Error('Card update failed');
       }
+      setFlashcards(prev => prev.map(card =>
+        card.id === updatedCard._id
+          ? {
+              id: updatedCard._id,
+              question: updatedCard.question,
+              answer: updatedCard.answer,
+              order_index: updatedCard.orderIndex,
+            }
+          : card
+      ));
+      setIsEditing(false);
+      onUpdate();
     } catch (error) {
       console.error('Failed to update flashcard:', error);
       alert('Failed to update flashcard');
@@ -298,18 +283,13 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
     if (!confirm('Are you sure you want to delete this flashcard?')) return;
 
     try {
-      const response = await fetch(`/api/flashcards/${currentCard.id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        const newFlashcards = flashcards.filter(card => card.id !== currentCard.id);
-        setFlashcards(newFlashcards);
-        if (currentIndex >= newFlashcards.length) {
-          setCurrentIndex(Math.max(0, newFlashcards.length - 1));
-        }
-        onUpdate();
+      await deleteFlashcard({ flashcardId: currentCard.id });
+      const newFlashcards = flashcards.filter(card => card.id !== currentCard.id);
+      setFlashcards(newFlashcards);
+      if (currentIndex >= newFlashcards.length) {
+        setCurrentIndex(Math.max(0, newFlashcards.length - 1));
       }
+      onUpdate();
     } catch (error) {
       console.error('Failed to delete flashcard:', error);
       alert('Failed to delete flashcard');
@@ -335,23 +315,26 @@ export default function FlashcardViewer({ flashcards: initialFlashcards, setId, 
     }
 
     try {
-      const response = await fetch('/api/flashcards', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          set_id: setId,
-          question: newQuestion,
-          answer: newAnswer,
-        }),
+      const newCard = await createFlashcard({
+        setId,
+        question: newQuestion,
+        answer: newAnswer,
       });
-
-      if (response.ok) {
-        const newCard = await response.json();
-        setFlashcards(prev => [...prev, newCard]);
-        setIsAdding(false);
-        setCurrentIndex(flashcards.length); // Jump to new card
-        onUpdate();
+      if (!newCard) {
+        throw new Error('Card creation failed');
       }
+      setFlashcards(prev => [
+        ...prev,
+        {
+          id: newCard._id,
+          question: newCard.question,
+          answer: newCard.answer,
+          order_index: newCard.orderIndex,
+        },
+      ]);
+      setIsAdding(false);
+      setCurrentIndex(flashcards.length);
+      onUpdate();
     } catch (error) {
       console.error('Failed to create flashcard:', error);
       alert('Failed to create flashcard');

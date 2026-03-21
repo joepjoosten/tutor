@@ -1,55 +1,65 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useState } from 'react';
+import { useAction, useQuery } from 'convex/react';
+import type { Id } from '@/convex/_generated/dataModel';
+import { api } from '@/convex/_generated/api';
+import { authClient } from '@/lib/auth-client';
+import AuthCard from '@/components/AuthCard';
 import ImageUpload from '@/components/ImageUpload';
 import ModelSelector from '@/components/ModelSelector';
 import FlashcardViewer from '@/components/FlashcardViewer';
 
 interface UploadedImage {
-  id: number;
-  filepath: string;
+  id: Id<'images'>;
+  url: string | null;
   preview: string;
 }
 
 interface Flashcard {
-  id: number;
+  id: Id<'flashcards'>;
   question: string;
   answer: string;
   order_index: number;
 }
 
 interface FlashcardSet {
-  id: number;
+  id: Id<'flashcardSets'>;
   title: string;
   description: string | null;
 }
 
+function mapFlashcard(card: {
+  _id: Id<'flashcards'>;
+  question: string;
+  answer: string;
+  orderIndex: number;
+}) {
+  return {
+    id: card._id,
+    question: card.question,
+    answer: card.answer,
+    order_index: card.orderIndex,
+  };
+}
+
 export default function Home() {
+  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const recentInstructions = useQuery(
+    api.flashcards.getRecentInstructions,
+    session ? {} : 'skip'
+  );
+  const settings = useQuery(api.settings.getUserSettings, session ? {} : 'skip');
+  const generateFlashcards = useAction(api.generation.generateFlashcards);
+
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [selectedModel, setSelectedModel] = useState('google/gemini-flash-1.5');
   const [customInstructions, setCustomInstructions] = useState('');
-  const [recentInstructions, setRecentInstructions] = useState<string[]>([]);
   const [generating, setGenerating] = useState(false);
   const [flashcardSet, setFlashcardSet] = useState<FlashcardSet | null>(null);
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  // Fetch recent custom instructions when component mounts
-  useEffect(() => {
-    const fetchRecentInstructions = async () => {
-      try {
-        const response = await fetch('/api/recent-instructions');
-        if (response.ok) {
-          const data = await response.json();
-          setRecentInstructions(data.instructions);
-        }
-      } catch (err) {
-        console.error('Failed to fetch recent instructions:', err);
-      }
-    };
-
-    fetchRecentInstructions();
-  }, []);
 
   const handleImagesChange = (newImages: UploadedImage[]) => {
     setImages(newImages);
@@ -62,45 +72,37 @@ export default function Home() {
       return;
     }
 
+    if (!settings?.hasOpenRouterKey) {
+      setError('Add your OpenRouter API key in Settings before generating flashcards.');
+      return;
+    }
+
     setGenerating(true);
     setError(null);
 
     try {
-      const response = await fetch('/api/generate-flashcards', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          imageIds: images.map(img => img.id),
-          model: selectedModel,
-          customInstructions: customInstructions.trim() || undefined,
-        }),
+      const data = await generateFlashcards({
+        imageIds: images.map((image) => image.id),
+        model: selectedModel,
+        customInstructions: customInstructions.trim() || undefined,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate flashcards');
+      if (!data.flashcardSet) {
+        throw new Error('Failed to generate flashcards');
       }
 
-      setFlashcardSet(data.flashcardSet);
-      setFlashcards(data.flashcards);
-
-      // Refresh recent instructions after successful generation
-      if (customInstructions.trim()) {
-        try {
-          const response = await fetch('/api/recent-instructions');
-          if (response.ok) {
-            const data = await response.json();
-            setRecentInstructions(data.instructions);
-          }
-        } catch (err) {
-          console.error('Failed to refresh recent instructions:', err);
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate flashcards');
+      setFlashcardSet({
+        id: data.flashcardSet._id,
+        title: data.flashcardSet.title,
+        description: data.flashcardSet.description ?? null,
+      });
+      setFlashcards(data.flashcards.map(mapFlashcard));
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : 'Failed to generate flashcards'
+      );
     } finally {
       setGenerating(false);
     }
@@ -114,6 +116,31 @@ export default function Home() {
     setError(null);
   };
 
+  if (sessionPending) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-12 text-center text-gray-600 dark:text-gray-300">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <div className="text-center mb-10">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">
+            Bring your own AI key. Keep your own study library.
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            Sign in to store your flashcard sets, study progress, and your own
+            encrypted OpenRouter key.
+          </p>
+        </div>
+        <AuthCard />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
       <div className="text-center mb-8">
@@ -124,6 +151,21 @@ export default function Home() {
           Upload pictures of homework or study material, and AI will create flashcards to help you learn
         </p>
       </div>
+
+      {!settings?.hasOpenRouterKey && (
+        <div className="mb-6 p-4 bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-100 rounded-xl">
+          <div className="font-medium">Add your OpenRouter key before generating.</div>
+          <div className="mt-1 text-sm">
+            This app uses your own key, encrypted per user.
+          </div>
+          <Link
+            href="/settings"
+            className="inline-block mt-3 text-sm font-medium underline underline-offset-2"
+          >
+            Open Settings
+          </Link>
+        </div>
+      )}
 
       {!flashcardSet ? (
         <div className="space-y-6">
@@ -153,15 +195,15 @@ export default function Home() {
                   Provide specific guidance for the AI on what kind of flashcards to create
                 </p>
 
-                {recentInstructions.length > 0 && (
+                {(recentInstructions?.length ?? 0) > 0 && (
                   <div className="mt-4">
                     <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
                       Recent instructions:
                     </p>
                     <div className="space-y-2">
-                      {recentInstructions.map((instruction, index) => (
+                      {recentInstructions?.map((instruction: string) => (
                         <button
-                          key={index}
+                          key={instruction}
                           type="button"
                           onClick={() => setCustomInstructions(instruction)}
                           disabled={generating}
@@ -176,8 +218,8 @@ export default function Home() {
               </div>
 
               <button
-                onClick={handleGenerateFlashcards}
-                disabled={generating}
+                onClick={() => void handleGenerateFlashcards()}
+                disabled={generating || !settings?.hasOpenRouterKey}
                 className="w-full py-4 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-lg rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {generating ? (
@@ -195,12 +237,12 @@ export default function Home() {
                         r="10"
                         stroke="currentColor"
                         strokeWidth="4"
-                      ></circle>
+                      />
                       <path
                         className="opacity-75"
                         fill="currentColor"
                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
+                      />
                     </svg>
                     Generating Flashcards...
                   </span>
@@ -252,12 +294,12 @@ export default function Home() {
           />
 
           <div className="text-center">
-            <a
+            <Link
               href="/flashcards"
               className="inline-block px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg shadow-md transition-colors"
             >
               View All My Flashcards
-            </a>
+            </Link>
           </div>
         </div>
       )}

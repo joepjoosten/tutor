@@ -1,11 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import NextImage from 'next/image';
+import { useMutation } from 'convex/react';
+import { api } from '@/convex/_generated/api';
+import type { Id } from '@/convex/_generated/dataModel';
 import ImageCropper from './ImageCropper';
 
 interface UploadedImage {
-  id: number;
-  filepath: string;
+  id: Id<'images'>;
+  url: string | null;
   preview: string;
 }
 
@@ -86,6 +90,9 @@ async function compressImage(blob: Blob, maxSizeKB: number = 1024): Promise<Blob
 }
 
 export default function ImageUpload({ onImagesChange }: ImageUploadProps) {
+  const generateUploadUrl = useMutation(api.images.generateUploadUrl);
+  const saveUploadedImage = useMutation(api.images.saveUploadedImage);
+  const deleteImage = useMutation(api.images.deleteImage);
   const [uploading, setUploading] = useState(false);
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -151,23 +158,30 @@ export default function ImageUpload({ onImagesChange }: ImageUploadProps) {
       const formData = new FormData();
       formData.append('file', fileToUpload, cropImage.file.name);
 
-      const response = await fetch('/api/upload', {
+      const postUrl = await generateUploadUrl({});
+      const response = await fetch(postUrl, {
         method: 'POST',
         body: formData,
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || 'Upload failed');
+        throw new Error('Upload failed');
       }
+
+      const { storageId } = await response.json();
+      const image = await saveUploadedImage({
+        storageId,
+        filename: cropImage.file.name,
+        mimeType: fileToUpload.type || cropImage.file.type || 'image/jpeg',
+        size: fileToUpload.size,
+      });
 
       // Add to uploaded images
       const newImages = [
         ...images,
         {
-          id: data.image.id,
-          filepath: data.image.filepath,
+          id: image._id,
+          url: image.url ?? null,
           preview: croppedDataUrl,
         },
       ];
@@ -194,10 +208,19 @@ export default function ImageUpload({ onImagesChange }: ImageUploadProps) {
     setCropImage(remaining.length > 0 ? remaining[0] : null);
   };
 
-  const removeImage = (index: number) => {
+  const removeImage = async (index: number) => {
+    const imageToRemove = images[index];
     const newImages = images.filter((_, i) => i !== index);
     setImages(newImages);
     onImagesChange(newImages);
+
+    if (imageToRemove) {
+      try {
+        await deleteImage({ imageId: imageToRemove.id });
+      } catch (err) {
+        console.error('Failed to delete image:', err);
+      }
+    }
   };
 
   return (
@@ -266,15 +289,17 @@ export default function ImageUpload({ onImagesChange }: ImageUploadProps) {
             {images.map((image, index) => (
               <div
                 key={index}
-                className="relative group bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden"
+                className="relative group bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden h-40"
               >
-                <img
+                <NextImage
                   src={image.preview}
                   alt={`Upload ${index + 1}`}
-                  className="w-full h-40 object-cover"
+                  fill
+                  unoptimized
+                  className="object-cover"
                 />
                 <button
-                  onClick={() => removeImage(index)}
+                  onClick={() => void removeImage(index)}
                   className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity"
                   title="Remove image"
                 >
