@@ -1,15 +1,49 @@
 import { convexBetterAuthNextJs } from "@convex-dev/better-auth/nextjs";
+import {
+  getConvexSiteUrl,
+  getConvexUnavailableMessage,
+  getConvexUrl,
+  getMissingConvexUrlMessage,
+  isConnectionRefusedError,
+} from "@/lib/convex-config";
 
-export const {
-  handler,
-  preloadAuthQuery,
-  isAuthenticated,
-  getToken,
-  fetchAuthQuery,
-  fetchAuthMutation,
-  fetchAuthAction,
-} = convexBetterAuthNextJs({
-  convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL ?? "http://127.0.0.1:3210",
-  convexSiteUrl:
-    process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "http://127.0.0.1:3210",
-});
+const convexUrl = getConvexUrl();
+const convexSiteUrl = getConvexSiteUrl();
+
+const auth = convexUrl
+  ? convexBetterAuthNextJs({
+      convexUrl,
+      convexSiteUrl: convexSiteUrl ?? convexUrl,
+    })
+  : null;
+
+export function getAuthRouteHandlers() {
+  return auth?.handler ?? null;
+}
+
+export function getAuthUnavailableMessage() {
+  if (!convexUrl) {
+    return getMissingConvexUrlMessage();
+  }
+
+  return getConvexUnavailableMessage(convexUrl);
+}
+
+export async function getToken() {
+  if (!auth) {
+    return null;
+  }
+
+  const configuredConvexUrl = convexUrl ?? convexSiteUrl;
+
+  try {
+    return await auth.getToken();
+  } catch (error) {
+    if (configuredConvexUrl && isConnectionRefusedError(error)) {
+      console.error(getConvexUnavailableMessage(configuredConvexUrl), error);
+      return null;
+    }
+
+    throw error;
+  }
+}
