@@ -28,7 +28,7 @@ export default defineSchema({
     userId: v.string(),
     title: v.string(),
     description: v.optional(v.string()),
-    llmInteractionId: v.id("llmInteractions"),
+    llmInteractionId: v.optional(v.id("llmInteractions")),
     flipMode: v.boolean(),
     createdAt: v.number(),
   })
