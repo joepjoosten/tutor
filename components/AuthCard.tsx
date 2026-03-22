@@ -1,8 +1,6 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { authClient } from "@/lib/auth-client";
 
 type Mode = "sign-in" | "sign-up";
@@ -14,11 +12,8 @@ export default function AuthCard() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const authProviders = useQuery(api.auth.getAuthProviders);
 
-  const googleEnabled =
-    process.env.NEXT_PUBLIC_DISABLE_GOOGLE_AUTH === "false"
-    && authProviders?.google === true;
+  const googleEnabled = process.env.NEXT_PUBLIC_DISABLE_GOOGLE_AUTH === "false";
   const isSignUp = mode === "sign-up";
   const callbackURL = useMemo(
     () => (typeof window === "undefined" ? "/" : window.location.origin),
