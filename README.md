@@ -45,8 +45,8 @@ Required for Google auth:
 - `GOOGLE_CLIENT_SECRET`
 - set `NEXT_PUBLIC_DISABLE_GOOGLE_AUTH=false`
 
-For local Convex development, set Google secrets on the Convex dev deployment
-too, because the auth provider is registered from the Convex backend:
+Because the auth provider is registered from the Convex backend, Google secrets
+must also be set on the Convex deployment that serves auth routes:
 
 ```bash
 npx convex env set GOOGLE_CLIENT_ID your_google_client_id
@@ -87,10 +87,21 @@ This repo is set up for Vercel-native deploys.
 - `AI_KEY_ENCRYPTION_SECRET`
 - `NEXT_PUBLIC_DISABLE_GOOGLE_AUTH`
 
-Production-only if using Google:
+Production-only if using Google in the UI:
+
+- set `NEXT_PUBLIC_DISABLE_GOOGLE_AUTH=false`
+
+Production Convex deployment variables if using Google auth:
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
+
+Set those on the production Convex deployment, for example:
+
+```bash
+npx convex env set --prod GOOGLE_CLIENT_ID your_google_client_id
+npx convex env set --prod GOOGLE_CLIENT_SECRET your_google_client_secret
+```
 
 Optional if you later add email reset / verification emails:
 

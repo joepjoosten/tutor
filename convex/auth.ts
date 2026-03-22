@@ -47,3 +47,12 @@ export const getCurrentUser = query({
     return authComponent.safeGetAuthUser(ctx) ?? null;
   },
 });
+
+export const getAuthProviders = query({
+  args: {},
+  handler: async () => {
+    return {
+      google: Boolean(googleClientId && googleClientSecret),
+    };
+  },
+});
