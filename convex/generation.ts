@@ -13,6 +13,19 @@ interface FlashcardResponse {
   }>;
 }
 
+interface OpenRouterErrorPayload {
+  error?: {
+    code?: number;
+    message?: string;
+    metadata?: {
+      provider_name?: string;
+      raw?: unknown;
+    };
+  };
+  usage?: { total_tokens?: number };
+  choices?: Array<{ message?: { content?: string } }>;
+}
+
 const getEncryptedOpenRouterKeyRef = makeFunctionReference<
   "query",
   { userId: string },
@@ -118,6 +131,40 @@ function parseFlashcardResponse(response: string): FlashcardResponse {
   return flashcardData;
 }
 
+function formatOpenRouterError(payload: OpenRouterErrorPayload) {
+  const message = payload.error?.message?.trim();
+  const providerName = payload.error?.metadata?.provider_name?.trim();
+  const rawError = payload.error?.metadata?.raw;
+
+  if (message === "Provider returned error") {
+    const rawMessage =
+      typeof rawError === "string"
+        ? rawError.trim()
+        : rawError &&
+            typeof rawError === "object" &&
+            "message" in rawError &&
+            typeof rawError.message === "string"
+          ? rawError.message.trim()
+          : null;
+
+    if (rawMessage) {
+      return providerName
+        ? `${providerName} rejected the image request: ${rawMessage}`
+        : `The model provider rejected the image request: ${rawMessage}`;
+    }
+
+    return providerName
+      ? `${providerName} rejected the image request. Try a different model.`
+      : "The selected model provider rejected the image request. Try a different model.";
+  }
+
+  if (message) {
+    return providerName ? `${providerName}: ${message}` : message;
+  }
+
+  return "OpenRouter request failed.";
+}
+
 export const generateFlashcards = action({
   args: {
     imageIds: v.array(v.id("images")),
@@ -139,6 +186,14 @@ export const generateFlashcards = action({
       userId,
       imageIds: args.imageIds,
     });
+
+    if (images.length === 0) {
+      throw new Error("Upload at least one image before generating flashcards.");
+    }
+
+    if (images.length !== args.imageIds.length) {
+      throw new Error("One or more selected images could not be loaded. Please re-upload and try again.");
+    }
 
     const prompt = buildPrompt(images.length, args.customInstructions);
     const messageContent: Array<
@@ -179,17 +234,16 @@ export const generateFlashcards = action({
         ],
         temperature: 0.7,
         max_tokens: 4000,
+        provider: {
+          require_parameters: true,
+        },
       }),
     });
 
-    const payload = (await response.json()) as {
-      error?: { message?: string };
-      usage?: { total_tokens?: number };
-      choices?: Array<{ message?: { content?: string } }>;
-    };
+    const payload = (await response.json()) as OpenRouterErrorPayload;
 
     if (!response.ok) {
-      throw new Error(payload.error?.message ?? "OpenRouter request failed.");
+      throw new Error(formatOpenRouterError(payload));
     }
 
     const modelResponse = payload.choices?.[0]?.message?.content;
