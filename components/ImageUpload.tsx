@@ -154,14 +154,16 @@ export default function ImageUpload({ onImagesChange }: ImageUploadProps) {
         }
       }
 
-      // Upload file
-      const formData = new FormData();
-      formData.append('file', fileToUpload, cropImage.file.name);
+      // Convex upload URLs expect the raw file bytes as the request body.
+      const uploadMimeType = fileToUpload.type || cropImage.file.type || 'image/jpeg';
 
       const postUrl = await generateUploadUrl({});
       const response = await fetch(postUrl, {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': uploadMimeType,
+        },
+        body: fileToUpload,
       });
 
       if (!response.ok) {
@@ -172,7 +174,7 @@ export default function ImageUpload({ onImagesChange }: ImageUploadProps) {
       const image = await saveUploadedImage({
         storageId,
         filename: cropImage.file.name,
-        mimeType: fileToUpload.type || cropImage.file.type || 'image/jpeg',
+        mimeType: uploadMimeType,
         size: fileToUpload.size,
       });
 
