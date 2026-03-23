@@ -36,8 +36,19 @@ interface CachedModelsPayload {
   models: ModelOption[];
 }
 
-const MODEL_CACHE_KEY = 'openrouter-vision-models';
+const MODEL_CACHE_KEY = 'openrouter-vision-models-v2';
 const MODEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const PREFERRED_MODEL_ORDER = [
+  'google/gemini-2.5-flash',
+  'openai/gpt-5.4',
+  'openai/gpt-5.4-nano',
+  'moonshotai/kimi-k2.5',
+  'openai/gpt-4o-mini',
+  'anthropic/claude-3.7-sonnet',
+  'google/gemini-2.5-pro',
+  'openai/gpt-4o',
+  'anthropic/claude-3.5-sonnet',
+];
 
 function formatContextLength(contextLength?: number) {
   if (!contextLength) {
@@ -70,6 +81,27 @@ function toModelOption(model: OpenRouterModel): ModelOption {
       model.top_provider?.context_length ?? model.context_length
     ),
   };
+}
+
+function compareModelOptions(left: ModelOption, right: ModelOption) {
+  const leftIndex = PREFERRED_MODEL_ORDER.indexOf(left.id);
+  const rightIndex = PREFERRED_MODEL_ORDER.indexOf(right.id);
+  const leftPreferred = leftIndex !== -1;
+  const rightPreferred = rightIndex !== -1;
+
+  if (leftPreferred && rightPreferred) {
+    return leftIndex - rightIndex;
+  }
+
+  if (leftPreferred) {
+    return -1;
+  }
+
+  if (rightPreferred) {
+    return 1;
+  }
+
+  return left.name.localeCompare(right.name);
 }
 
 export default function ModelSelector({ value, onChange, disabled }: ModelSelectorProps) {
@@ -148,7 +180,7 @@ export default function ModelSelector({ value, onChange, disabled }: ModelSelect
         const nextModels = (payload.data ?? [])
           .filter(isVisionTextModel)
           .map(toModelOption)
-          .sort((left, right) => left.name.localeCompare(right.name));
+          .sort(compareModelOptions);
 
         if (nextModels.length === 0) {
           throw new Error('No compatible image-capable models are currently available.');
@@ -228,7 +260,7 @@ export default function ModelSelector({ value, onChange, disabled }: ModelSelect
 
       {!selectedModel && !loading && !error && (
         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-          Models are loaded live from OpenRouter and filtered for image input plus text output.
+          Models are loaded live from OpenRouter, filtered for image input plus text output, and stable defaults are prioritized first.
         </p>
       )}
 
