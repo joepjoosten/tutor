@@ -54,7 +54,7 @@ export default function Home() {
   const generateFlashcards = useAction(api.generation.generateFlashcards);
 
   const [images, setImages] = useState<UploadedImage[]>([]);
-  const [selectedModel, setSelectedModel] = useState('google/gemini-flash-1.5');
+  const [selectedModel, setSelectedModel] = useState('');
   const [customInstructions, setCustomInstructions] = useState('');
   const [generating, setGenerating] = useState(false);
   const [flashcardSet, setFlashcardSet] = useState<FlashcardSet | null>(null);
@@ -219,7 +219,7 @@ export default function Home() {
 
               <button
                 onClick={() => void handleGenerateFlashcards()}
-                disabled={generating || !settings?.hasOpenRouterKey}
+                disabled={generating || !settings?.hasOpenRouterKey || !selectedModel}
                 className="w-full py-4 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-lg rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {generating ? (
