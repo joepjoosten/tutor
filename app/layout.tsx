@@ -3,6 +3,7 @@ import { ConvexClientProvider } from "./ConvexClientProvider";
 import AppHeader from "@/components/AppHeader";
 import { getToken } from "@/lib/auth-server";
 import "./globals.css";
+import "react-image-crop/dist/ReactCrop.css";
 
 export const metadata: Metadata = {
   title: "Tutor App - Homework Helper",
