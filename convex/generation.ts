@@ -1,4 +1,4 @@
-import { action } from "./_generated/server";
+import { action, type ActionCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { blobToBase64, decryptSecret, requireUser } from "./lib";
 import { makeFunctionReference } from "convex/server";
@@ -25,6 +25,13 @@ interface OpenRouterErrorPayload {
   usage?: { total_tokens?: number };
   choices?: Array<{ message?: { content?: string } }>;
 }
+
+const SUPPORTED_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
 
 const getEncryptedOpenRouterKeyRef = makeFunctionReference<
   "query",
@@ -136,6 +143,10 @@ function formatOpenRouterError(payload: OpenRouterErrorPayload) {
   const providerName = payload.error?.metadata?.provider_name?.trim();
   const rawError = payload.error?.metadata?.raw;
 
+  if (message?.includes("No endpoints found that can handle the requested parameters")) {
+    return "No OpenRouter provider is currently available for that model with image input. Try a different vision model.";
+  }
+
   if (message === "Provider returned error") {
     const rawMessage =
       typeof rawError === "string"
@@ -163,6 +174,42 @@ function formatOpenRouterError(payload: OpenRouterErrorPayload) {
   }
 
   return "OpenRouter request failed.";
+}
+
+async function buildImageContentPart(
+  ctx: ActionCtx,
+  image: {
+    filename: string;
+    mimeType: string;
+    storageId: Id<"_storage">;
+  }
+): Promise<{ type: "image_url"; image_url: { url: string } }> {
+  if (!SUPPORTED_IMAGE_MIME_TYPES.has(image.mimeType)) {
+    throw new Error(
+      `Unsupported image format for ${image.filename}. Please upload a JPEG, PNG, WebP, or GIF.`
+    );
+  }
+
+  const storageUrl = await ctx.storage.getUrl(image.storageId);
+  if (storageUrl) {
+    return {
+      type: "image_url",
+      image_url: { url: storageUrl },
+    };
+  }
+
+  const blob = await ctx.storage.get(image.storageId);
+  if (!blob) {
+    throw new Error(`Image not found: ${image.filename}`);
+  }
+
+  const base64Image = await blobToBase64(blob);
+  return {
+    type: "image_url",
+    image_url: {
+      url: `data:${image.mimeType};base64,${base64Image}`,
+    },
+  };
 }
 
 export const generateFlashcards = action({
@@ -201,20 +248,10 @@ export const generateFlashcards = action({
       | { type: "image_url"; image_url: { url: string } }
     > = [{ type: "text", text: prompt }];
 
-    for (const image of images) {
-      const blob = await ctx.storage.get(image.storageId);
-      if (!blob) {
-        throw new Error(`Image not found: ${image.filename}`);
-      }
-
-      const base64Image = await blobToBase64(blob);
-      messageContent.push({
-        type: "image_url",
-        image_url: {
-          url: `data:${image.mimeType};base64,${base64Image}`,
-        },
-      });
-    }
+    const imageParts = await Promise.all(
+      images.map((image) => buildImageContentPart(ctx, image))
+    );
+    messageContent.push(...imageParts);
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -234,9 +271,6 @@ export const generateFlashcards = action({
         ],
         temperature: 0.7,
         max_tokens: 4000,
-        provider: {
-          require_parameters: true,
-        },
       }),
     });
 
