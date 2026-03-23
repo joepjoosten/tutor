@@ -1,6 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState, type SyntheticEvent } from 'react';
+import ReactCrop, {
+  type PercentCrop,
+  type PixelCrop,
+  convertToPixelCrop,
+} from 'react-image-crop';
 
 interface ImageCropperProps {
   imageUrl: string;
@@ -8,277 +13,159 @@ interface ImageCropperProps {
   onCancel: () => void;
 }
 
-interface CropArea {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+const DEFAULT_INSET_PERCENT = 6;
+
+function buildInitialCrop(): PercentCrop {
+  return {
+    unit: '%',
+    x: DEFAULT_INSET_PERCENT,
+    y: DEFAULT_INSET_PERCENT,
+    width: 100 - DEFAULT_INSET_PERCENT * 2,
+    height: 100 - DEFAULT_INSET_PERCENT * 2,
+  };
+}
+
+async function createCroppedImage(image: HTMLImageElement, crop: PixelCrop) {
+  const scaleX = image.naturalWidth / image.width;
+  const scaleY = image.naturalHeight / image.height;
+  const sourceX = Math.round(crop.x * scaleX);
+  const sourceY = Math.round(crop.y * scaleY);
+  const sourceWidth = Math.max(1, Math.round(crop.width * scaleX));
+  const sourceHeight = Math.max(1, Math.round(crop.height * scaleY));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = sourceWidth;
+  canvas.height = sourceHeight;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Failed to create crop canvas');
+  }
+
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(
+    image,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    0,
+    0,
+    sourceWidth,
+    sourceHeight
+  );
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, 'image/jpeg', 0.9);
+  });
+
+  if (!blob) {
+    throw new Error('Failed to generate cropped image');
+  }
+
+  return {
+    blob,
+    dataUrl: canvas.toDataURL('image/jpeg', 0.9),
+  };
 }
 
 export default function ImageCropper({ imageUrl, onCropComplete, onCancel }: ImageCropperProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
-  const [cropArea, setCropArea] = useState<CropArea>({ x: 0, y: 0, width: 0, height: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [isResizing, setIsResizing] = useState(false);
-  const [scale, setScale] = useState(1);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const [crop, setCrop] = useState<PercentCrop>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      setImage(img);
-      // Initialize crop area to full image
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const containerWidth = canvas.parentElement?.clientWidth || 800;
-        const containerHeight = 600;
-        const imgAspect = img.width / img.height;
-        const containerAspect = containerWidth / containerHeight;
-
-        let displayWidth, displayHeight;
-        if (imgAspect > containerAspect) {
-          displayWidth = containerWidth;
-          displayHeight = containerWidth / imgAspect;
-        } else {
-          displayHeight = containerHeight;
-          displayWidth = containerHeight * imgAspect;
-        }
-
-        setScale(displayWidth / img.width);
-        canvas.width = displayWidth;
-        canvas.height = displayHeight;
-
-        // Set initial crop to full image
-        setCropArea({
-          x: 0,
-          y: 0,
-          width: displayWidth,
-          height: displayHeight,
-        });
-      }
-    };
-    img.src = imageUrl;
+    imageRef.current = null;
+    setCrop(undefined);
+    setCompletedCrop(undefined);
+    setLoadError(null);
+    setIsSaving(false);
   }, [imageUrl]);
 
-  useEffect(() => {
-    if (!image || !canvasRef.current) return;
+  const handleImageLoad = (e: SyntheticEvent<HTMLImageElement>) => {
+    const image = e.currentTarget;
+    const nextCrop = buildInitialCrop();
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw image
-    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-    // Draw semi-transparent overlay
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Clear crop area
-    ctx.clearRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
-
-    // Redraw image in crop area
-    const sourceX = cropArea.x / scale;
-    const sourceY = cropArea.y / scale;
-    const sourceWidth = cropArea.width / scale;
-    const sourceHeight = cropArea.height / scale;
-    ctx.drawImage(
-      image,
-      sourceX,
-      sourceY,
-      sourceWidth,
-      sourceHeight,
-      cropArea.x,
-      cropArea.y,
-      cropArea.width,
-      cropArea.height
-    );
-
-    // Draw crop rectangle
-    ctx.strokeStyle = '#3B82F6';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(cropArea.x, cropArea.y, cropArea.width, cropArea.height);
-
-    // Draw corner handles (larger for touch)
-    const handleSize = 20;
-    ctx.fillStyle = '#3B82F6';
-    // Top-left
-    ctx.fillRect(cropArea.x - handleSize / 2, cropArea.y - handleSize / 2, handleSize, handleSize);
-    // Top-right
-    ctx.fillRect(cropArea.x + cropArea.width - handleSize / 2, cropArea.y - handleSize / 2, handleSize, handleSize);
-    // Bottom-left
-    ctx.fillRect(cropArea.x - handleSize / 2, cropArea.y + cropArea.height - handleSize / 2, handleSize, handleSize);
-    // Bottom-right
-    ctx.fillRect(cropArea.x + cropArea.width - handleSize / 2, cropArea.y + cropArea.height - handleSize / 2, handleSize, handleSize);
-  }, [image, cropArea, scale]);
-
-  const getPointerPosition = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-
-    const rect = canvas.getBoundingClientRect();
-    let clientX, clientY;
-
-    if ('touches' in e) {
-      if (e.touches.length === 0) return null;
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-
-    return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
-    };
-  };
-
-  const handleStart = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    const pos = getPointerPosition(e);
-    if (!pos) return;
-
-    const { x, y } = pos;
-
-    // Check if clicking/touching on a corner handle (larger hit area for touch)
-    const handleSize = 30; // Larger hit area for touch
-    const corners = [
-      { x: cropArea.x, y: cropArea.y }, // top-left
-      { x: cropArea.x + cropArea.width, y: cropArea.y }, // top-right
-      { x: cropArea.x, y: cropArea.y + cropArea.height }, // bottom-left
-      { x: cropArea.x + cropArea.width, y: cropArea.y + cropArea.height }, // bottom-right
-    ];
-
-    for (const corner of corners) {
-      if (Math.abs(x - corner.x) < handleSize && Math.abs(y - corner.y) < handleSize) {
-        setIsResizing(true);
-        setDragStart({ x, y });
-        return;
-      }
-    }
-
-    // Check if clicking/touching inside crop area
-    if (
-      x >= cropArea.x &&
-      x <= cropArea.x + cropArea.width &&
-      y >= cropArea.y &&
-      y <= cropArea.y + cropArea.height
-    ) {
-      setIsDragging(true);
-      setDragStart({ x: x - cropArea.x, y: y - cropArea.y });
-    }
-  };
-
-  const handleMove = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const pos = getPointerPosition(e);
-    if (!pos) return;
-
-    const { x, y } = pos;
-
-    if (isDragging) {
-      const newX = Math.max(0, Math.min(x - dragStart.x, canvas.width - cropArea.width));
-      const newY = Math.max(0, Math.min(y - dragStart.y, canvas.height - cropArea.height));
-      setCropArea({ ...cropArea, x: newX, y: newY });
-    } else if (isResizing) {
-      const newWidth = Math.max(50, Math.min(x - cropArea.x, canvas.width - cropArea.x));
-      const newHeight = Math.max(50, Math.min(y - cropArea.y, canvas.height - cropArea.y));
-      setCropArea({ ...cropArea, width: newWidth, height: newHeight });
-    }
-  };
-
-  const handleEnd = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-    setIsResizing(false);
+    imageRef.current = image;
+    setLoadError(null);
+    setCrop(nextCrop);
+    setCompletedCrop(convertToPixelCrop(nextCrop, image.width, image.height));
   };
 
   const handleCrop = async () => {
-    if (!image || !canvasRef.current) return;
+    if (!imageRef.current || !completedCrop || completedCrop.width < 1 || completedCrop.height < 1) {
+      return;
+    }
 
-    const cropCanvas = document.createElement('canvas');
-    const sourceX = cropArea.x / scale;
-    const sourceY = cropArea.y / scale;
-    const sourceWidth = cropArea.width / scale;
-    const sourceHeight = cropArea.height / scale;
+    setIsSaving(true);
 
-    cropCanvas.width = sourceWidth;
-    cropCanvas.height = sourceHeight;
-
-    const ctx = cropCanvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.drawImage(
-      image,
-      sourceX,
-      sourceY,
-      sourceWidth,
-      sourceHeight,
-      0,
-      0,
-      sourceWidth,
-      sourceHeight
-    );
-
-    cropCanvas.toBlob(
-      (blob) => {
-        if (blob) {
-          const croppedDataUrl = cropCanvas.toDataURL('image/jpeg', 0.9);
-          onCropComplete(blob, croppedDataUrl);
-        }
-      },
-      'image/jpeg',
-      0.9
-    );
+    try {
+      const { blob, dataUrl } = await createCroppedImage(imageRef.current, completedCrop);
+      onCropComplete(blob, dataUrl);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-auto">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 sm:p-4">
+      <div className="flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-gray-800">
+        <div className="border-b border-gray-200 p-4 dark:border-gray-700">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Crop Image</h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Drag to move crop area, drag corners to resize
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Drag the selection to move it. Use the corner handles to resize.
           </p>
         </div>
 
-        <div className="p-4 flex justify-center overflow-auto" style={{ touchAction: 'none' }}>
-          <canvas
-            ref={canvasRef}
-            onMouseDown={handleStart}
-            onMouseMove={handleMove}
-            onMouseUp={handleEnd}
-            onMouseLeave={handleEnd}
-            onTouchStart={handleStart}
-            onTouchMove={handleMove}
-            onTouchEnd={handleEnd}
-            onTouchCancel={handleEnd}
-            className="cursor-move border border-gray-300 dark:border-gray-600 touch-none"
-            style={{ touchAction: 'none' }}
-          />
+        <div className="flex-1 overflow-auto p-3 sm:p-4">
+          <div className="flex min-h-[45vh] items-center justify-center rounded-xl bg-gray-100 p-2 dark:bg-gray-900/60 sm:min-h-[55vh] sm:p-4">
+            {loadError ? (
+              <p className="text-sm text-red-600 dark:text-red-400">
+                The selected image could not be loaded for cropping.
+              </p>
+            ) : (
+              <ReactCrop
+                crop={crop}
+                keepSelection
+                minHeight={80}
+                minWidth={80}
+                ruleOfThirds
+                onChange={(_, percentCrop) => setCrop(percentCrop)}
+                onComplete={(pixelCrop) => setCompletedCrop(pixelCrop)}
+                style={{ maxHeight: '72vh', maxWidth: '100%' }}
+              >
+                {/* ReactCrop expects a real img element so it can measure the rendered media correctly. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  alt="Crop preview"
+                  className="max-h-[72vh] max-w-full select-none object-contain"
+                  draggable={false}
+                  onError={() => setLoadError('failed')}
+                  onLoad={handleImageLoad}
+                  src={imageUrl}
+                />
+              </ReactCrop>
+            )}
+          </div>
         </div>
 
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+        <div className="flex flex-col-reverse gap-3 border-t border-gray-200 p-4 dark:border-gray-700 sm:flex-row sm:justify-end">
           <button
+            className="rounded-lg bg-gray-200 px-6 py-3 text-base text-gray-800 transition-colors hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
             onClick={onCancel}
-            className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-base"
+            type="button"
           >
             Cancel
           </button>
           <button
+            className="rounded-lg bg-blue-600 px-6 py-3 text-base text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
+            disabled={!completedCrop || isSaving || !!loadError}
             onClick={handleCrop}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-base"
+            type="button"
           >
-            Crop & Continue
+            {isSaving ? 'Cropping...' : 'Crop & Continue'}
           </button>
         </div>
       </div>
