@@ -146,9 +146,23 @@ export const deleteFlashcardSet = mutation({
       .query("studyProgress")
       .withIndex("by_userId_setId", (q) => q.eq("userId", userId).eq("setId", args.setId))
       .collect();
+    const sharedSets = await ctx.db
+      .query("sharedFlashcardSets")
+      .withIndex("by_sourceSetId_createdAt", (q) => q.eq("sourceSetId", args.setId))
+      .collect();
+    const sharedCards = await Promise.all(
+      sharedSets.map((sharedSet) =>
+        ctx.db
+          .query("sharedFlashcards")
+          .withIndex("by_sharedSetId_orderIndex", (q) => q.eq("sharedSetId", sharedSet._id))
+          .collect()
+      )
+    );
 
     await Promise.all(flashcards.map((card) => ctx.db.delete(card._id)));
     await Promise.all(progress.map((item) => ctx.db.delete(item._id)));
+    await Promise.all(sharedCards.flat().map((card) => ctx.db.delete(card._id)));
+    await Promise.all(sharedSets.map((sharedSet) => ctx.db.delete(sharedSet._id)));
     await ctx.db.delete(args.setId);
   },
 });

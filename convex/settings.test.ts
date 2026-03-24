@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { handlerOf } from "./testHelpers";
+
 const { mockRequireUser, mockEncryptSecret } = vi.hoisted(() => ({
   mockRequireUser: vi.fn(),
   mockEncryptSecret: vi.fn(),
@@ -20,7 +22,7 @@ import {
 function createIndexedQueryResult<T>(options?: { unique?: T | null }) {
   const unique = vi.fn().mockResolvedValue(options?.unique ?? null);
   const chain = { unique };
-  const withIndex = vi.fn().mockImplementation((_, callback?: (q: { eq: typeof vi.fn }) => unknown) => {
+  const withIndex = vi.fn().mockImplementation((_indexName: string, callback?: (q: { eq: typeof vi.fn }) => unknown) => {
     const builder = {
       eq: vi.fn().mockReturnThis(),
     };
@@ -68,7 +70,7 @@ describe("settings:setOpenRouterKey", () => {
   it("creates a settings document with trimmed key data when none exists", async () => {
     const { ctx, insert, patch } = createSettingsCtx();
 
-    await setOpenRouterKey._handler(ctx as never, {
+    await handlerOf(setOpenRouterKey)(ctx as never, {
       apiKey: "  sk-or-key-1234  ",
     });
 
@@ -89,7 +91,7 @@ describe("settings:setOpenRouterKey", () => {
       _id: "settings-doc-id",
     });
 
-    await setOpenRouterKey._handler(ctx as never, {
+    await handlerOf(setOpenRouterKey)(ctx as never, {
       apiKey: "sk-or-key-9876",
     });
 
@@ -109,7 +111,7 @@ describe("settings:setOpenRouterKey", () => {
       openRouterKeyLast4: "9876",
     } as never);
 
-    await expect(getUserSettings._handler(ctx as never, {} as never)).resolves.toEqual({
+    await expect(handlerOf(getUserSettings)(ctx as never, {} as never)).resolves.toEqual({
       hasOpenRouterKey: true,
       openRouterKeyLast4: "9876",
     });
@@ -120,7 +122,7 @@ describe("settings:setOpenRouterKey", () => {
       _id: "settings-doc-id",
     });
 
-    await clearOpenRouterKey._handler(ctx as never, {} as never);
+    await handlerOf(clearOpenRouterKey)(ctx as never, {} as never);
 
     expect(patch).toHaveBeenCalledWith("settings-doc-id", {
       openRouterKeyCiphertext: undefined,
@@ -132,7 +134,7 @@ describe("settings:setOpenRouterKey", () => {
   it("does nothing when clearing a key for a user without settings", async () => {
     const { ctx, patch } = createSettingsCtx();
 
-    await clearOpenRouterKey._handler(ctx as never, {} as never);
+    await handlerOf(clearOpenRouterKey)(ctx as never, {} as never);
 
     expect(patch).not.toHaveBeenCalled();
   });
@@ -151,7 +153,7 @@ describe("settings:setOpenRouterKey", () => {
     };
 
     await expect(
-      getEncryptedOpenRouterKey._handler(ctx as never, {
+      handlerOf(getEncryptedOpenRouterKey)(ctx as never, {
         userId: "user-123",
       })
     ).resolves.toBe("encrypted-value");
@@ -166,7 +168,7 @@ describe("settings:setOpenRouterKey", () => {
     };
 
     await expect(
-      getEncryptedOpenRouterKey._handler(ctx as never, {
+      handlerOf(getEncryptedOpenRouterKey)(ctx as never, {
         userId: "user-123",
       })
     ).resolves.toBeNull();

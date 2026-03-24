@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { handlerOf } from "./testHelpers";
+
 const { mockRequireUser } = vi.hoisted(() => ({
   mockRequireUser: vi.fn(),
 }));
@@ -38,7 +40,7 @@ function createIndexedQueryPlan<T>(options?: {
     take,
     order: vi.fn().mockReturnValue(ordered),
   };
-  const withIndex = vi.fn().mockImplementation((_, callback?: (q: { eq: typeof vi.fn }) => unknown) => {
+  const withIndex = vi.fn().mockImplementation((_indexName: string, callback?: (q: { eq: typeof vi.fn }) => unknown) => {
     const builder = {
       eq: vi.fn().mockReturnThis(),
     };
@@ -118,7 +120,7 @@ describe("flashcards", () => {
       },
     });
 
-    await expect(listFlashcardSets._handler(ctx as never, {} as never)).resolves.toEqual([
+    await expect(handlerOf(listFlashcardSets)(ctx as never, {} as never)).resolves.toEqual([
       {
         _id: "set-1",
         userId: "user-123",
@@ -152,7 +154,7 @@ describe("flashcards", () => {
     });
 
     await expect(
-      getRecentInstructions._handler(ctx as never, {} as never)
+      handlerOf(getRecentInstructions)(ctx as never, {} as never)
     ).resolves.toEqual([
       "Focus on definitions",
       "Add examples",
@@ -185,7 +187,7 @@ describe("flashcards", () => {
       } as never);
 
     await expect(
-      updateFlashcardSet._handler(ctx as never, {
+      handlerOf(updateFlashcardSet)(ctx as never, {
         setId: "set-1" as never,
         title: "New title",
         description: null,
@@ -221,7 +223,7 @@ describe("flashcards", () => {
     });
 
     await expect(
-      createFlashcardSet._handler(ctx as never, {
+      handlerOf(createFlashcardSet)(ctx as never, {
         title: "  Biology  ",
         description: "  Chapter 1  ",
       })
@@ -243,7 +245,7 @@ describe("flashcards", () => {
     });
 
     await expect(
-      createFlashcardSet._handler(ctx as never, {
+      handlerOf(createFlashcardSet)(ctx as never, {
         title: "   ",
       } as never)
     ).rejects.toThrow("Title is required.");
@@ -256,21 +258,31 @@ describe("flashcards", () => {
     const progressPlan = createIndexedQueryPlan({
       collect: [{ _id: "progress-1" }],
     });
+    const sharedSetsPlan = createIndexedQueryPlan({
+      collect: [{ _id: "shared-set-1" }],
+    });
+    const sharedCardsPlan = createIndexedQueryPlan({
+      collect: [{ _id: "shared-card-1" }],
+    });
     const { ctx, delete: deleteDoc } = createFlashcardsCtx({
       getById: {
         "set-1": { _id: "set-1", userId: "user-123" },
       },
       queryPlans: {
         flashcards: [flashcardsPlan],
+        sharedFlashcardSets: [sharedSetsPlan],
+        sharedFlashcards: [sharedCardsPlan],
         studyProgress: [progressPlan],
       },
     });
 
-    await deleteFlashcardSet._handler(ctx as never, { setId: "set-1" as never });
+    await handlerOf(deleteFlashcardSet)(ctx as never, { setId: "set-1" as never });
 
     expect(deleteDoc).toHaveBeenCalledWith("card-1");
     expect(deleteDoc).toHaveBeenCalledWith("card-2");
     expect(deleteDoc).toHaveBeenCalledWith("progress-1");
+    expect(deleteDoc).toHaveBeenCalledWith("shared-card-1");
+    expect(deleteDoc).toHaveBeenCalledWith("shared-set-1");
     expect(deleteDoc).toHaveBeenCalledWith("set-1");
   });
 
@@ -298,7 +310,7 @@ describe("flashcards", () => {
     });
 
     await expect(
-      createFlashcard._handler(ctx as never, {
+      handlerOf(createFlashcard)(ctx as never, {
         setId: "set-1" as never,
         question: "New question",
         answer: "New answer",
@@ -335,7 +347,7 @@ describe("flashcards", () => {
       } as never);
 
     await expect(
-      updateFlashcard._handler(ctx as never, {
+      handlerOf(updateFlashcard)(ctx as never, {
         flashcardId: "card-1" as never,
         question: "Updated question",
         answer: "Updated answer",
@@ -370,7 +382,7 @@ describe("flashcards", () => {
       },
     });
 
-    await deleteFlashcard._handler(ctx as never, {
+    await handlerOf(deleteFlashcard)(ctx as never, {
       flashcardId: "card-1" as never,
     });
 
@@ -394,7 +406,7 @@ describe("flashcards", () => {
     });
 
     await expect(
-      getStudyProgress._handler(ctx as never, { setId: "set-1" as never })
+      handlerOf(getStudyProgress)(ctx as never, { setId: "set-1" as never })
     ).resolves.toEqual([{ _id: "progress-1", dontKnow: true }]);
   });
 
@@ -414,7 +426,7 @@ describe("flashcards", () => {
     });
 
     await expect(
-      markStudyProgress._handler(ctx as never, {
+      handlerOf(markStudyProgress)(ctx as never, {
         setId: "set-1" as never,
         flashcardId: "card-1" as never,
         dontKnow: false,
@@ -444,7 +456,7 @@ describe("flashcards", () => {
     });
 
     await expect(
-      markStudyProgress._handler(ctx as never, {
+      handlerOf(markStudyProgress)(ctx as never, {
         setId: "set-1" as never,
         flashcardId: "card-1" as never,
         dontKnow: true,
@@ -473,7 +485,7 @@ describe("flashcards", () => {
       },
     });
 
-    await resetStudyProgress._handler(ctx as never, {
+    await handlerOf(resetStudyProgress)(ctx as never, {
       setId: "set-1" as never,
     });
 
@@ -515,7 +527,7 @@ describe("flashcards", () => {
     });
 
     await expect(
-      createGeneratedFlashcards._handler(ctx as never, {
+      handlerOf(createGeneratedFlashcards)(ctx as never, {
         userId: "user-123",
         model: "openai/gpt-4o-mini",
         prompt: "prompt",

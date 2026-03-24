@@ -16,6 +16,8 @@ import type * as http from "../http.js";
 import type * as images from "../images.js";
 import type * as lib from "../lib.js";
 import type * as settings from "../settings.js";
+import type * as shares from "../shares.js";
+import type * as testHelpers from "../testHelpers.js";
 
 import type {
   ApiFromModules,
@@ -32,6 +34,8 @@ declare const fullApi: ApiFromModules<{
   images: typeof images;
   lib: typeof lib;
   settings: typeof settings;
+  shares: typeof shares;
+  testHelpers: typeof testHelpers;
 }>;
 
 /**

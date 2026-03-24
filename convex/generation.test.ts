@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { handlerOf } from "./testHelpers";
+
 const { mockRequireUser, mockDecryptSecret, mockBlobToBase64 } = vi.hoisted(
   () => ({
     mockRequireUser: vi.fn(),
@@ -83,7 +85,7 @@ describe("generation:generateFlashcards", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      generateFlashcards._handler(ctx as never, {
+      handlerOf(generateFlashcards)(ctx as never, {
         imageIds: ["image-1"] as never,
         model: "openai/gpt-4o-mini",
       })
@@ -127,7 +129,7 @@ describe("generation:generateFlashcards", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      generateFlashcards._handler(ctx as never, {
+      handlerOf(generateFlashcards)(ctx as never, {
         imageIds: ["image-1"] as never,
         model: "anthropic/claude-3.5-sonnet",
       })
@@ -193,7 +195,7 @@ describe("generation:generateFlashcards", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await generateFlashcards._handler(ctx as never, {
+    const result = await handlerOf(generateFlashcards)(ctx as never, {
       imageIds: ["image-1", "image-2"] as never,
       model: "openai/gpt-4o-mini",
       customInstructions: "Focus on definitions.",

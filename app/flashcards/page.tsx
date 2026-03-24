@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import type { Id } from '@/convex/_generated/dataModel';
 import { api } from '@/convex/_generated/api';
@@ -54,13 +55,17 @@ function mapSet(set: {
 }
 
 export default function FlashcardsPage() {
+  const searchParams = useSearchParams();
   const { data: session, isPending: sessionPending } = authClient.useSession();
+  const requestedSetId = searchParams.get('setId') as Id<'flashcardSets'> | null;
   const rawSets = useQuery(api.flashcards.listFlashcardSets, session ? {} : 'skip');
   const createSet = useMutation(api.flashcards.createFlashcardSet);
   const deleteSet = useMutation(api.flashcards.deleteFlashcardSet);
   const updateSet = useMutation(api.flashcards.updateFlashcardSet);
+  const createOrGetShareLink = useMutation(api.shares.createOrGetShareLink);
+  const revokeShareLink = useMutation(api.shares.revokeShareLink);
 
-  const [selectedSetId, setSelectedSetId] = useState<Id<'flashcardSets'> | null>(null);
+  const [selectedSetId, setSelectedSetId] = useState<Id<'flashcardSets'> | null>(requestedSetId);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const [isEditingDescription, setIsEditingDescription] = useState(false);
@@ -70,14 +75,33 @@ export default function FlashcardsPage() {
   const [newSetDescription, setNewSetDescription] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
   const [creatingSet, setCreatingSet] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
 
   const sets = useMemo(() => (rawSets ?? []).map(mapSet), [rawSets]);
   const selectedSet = useMemo(
     () => sets.find((set: FlashcardSet) => set.id === selectedSetId) ?? null,
     [selectedSetId, sets]
   );
+  const activeShare = useQuery(
+    api.shares.getActiveShareForSet,
+    session && selectedSet ? { setId: selectedSet.id } : 'skip'
+  );
+
+  useEffect(() => {
+    if (requestedSetId) {
+      setSelectedSetId(requestedSetId);
+    }
+  }, [requestedSetId]);
 
   const loading = sessionPending || (session ? rawSets === undefined : false);
+
+  const buildShareUrl = (slug: string) => {
+    if (typeof window === 'undefined') {
+      return `/shared/${slug}`;
+    }
+    return `${window.location.origin}/shared/${slug}`;
+  };
 
   const handleDeleteSet = async (id: Id<'flashcardSets'>) => {
     if (!confirm('Are you sure you want to delete this flashcard set?')) {
@@ -218,6 +242,52 @@ export default function FlashcardsPage() {
     }
   };
 
+  const handleCreateOrRefreshShare = async () => {
+    if (!selectedSet) return;
+
+    try {
+      setShareBusy(true);
+      setShareMessage(null);
+      await createOrGetShareLink({ setId: selectedSet.id });
+      setShareMessage(
+        activeShare ? 'Shared snapshot refreshed.' : 'Share link created.'
+      );
+    } catch (error) {
+      console.error('Failed to create share link:', error);
+      setShareMessage('Failed to create share link.');
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+  const handleCopyShareLink = async () => {
+    if (!activeShare) return;
+
+    try {
+      await navigator.clipboard.writeText(buildShareUrl(activeShare.slug));
+      setShareMessage('Share link copied.');
+    } catch (error) {
+      console.error('Failed to copy share link:', error);
+      setShareMessage('Failed to copy share link.');
+    }
+  };
+
+  const handleRevokeShareLink = async () => {
+    if (!selectedSet) return;
+
+    try {
+      setShareBusy(true);
+      setShareMessage(null);
+      await revokeShareLink({ setId: selectedSet.id });
+      setShareMessage('Share link revoked.');
+    } catch (error) {
+      console.error('Failed to revoke share link:', error);
+      setShareMessage('Failed to revoke share link.');
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
@@ -353,6 +423,71 @@ export default function FlashcardsPage() {
                   Flip Questions & Answers (show answers as questions)
                 </span>
               </label>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                    Share This Set
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Shared links stay public until you revoke them. Other users only get their own editable copy if they explicitly import.
+                  </p>
+                </div>
+                <button
+                  onClick={() => void handleCreateOrRefreshShare()}
+                  disabled={shareBusy}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {shareBusy
+                    ? 'Working...'
+                    : activeShare
+                    ? 'Refresh Shared Snapshot'
+                    : 'Create Share Link'}
+                </button>
+              </div>
+
+              {activeShare && (
+                <>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <input
+                      type="text"
+                      readOnly
+                      value={buildShareUrl(activeShare.slug)}
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white"
+                    />
+                    <button
+                      onClick={() => void handleCopyShareLink()}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                    >
+                      Copy Link
+                    </button>
+                    <Link
+                      href={`/shared/${activeShare.slug}`}
+                      className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-center text-gray-800 dark:text-gray-100 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      Open
+                    </Link>
+                    <button
+                      onClick={() => void handleRevokeShareLink()}
+                      disabled={shareBusy}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      Revoke
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Revoking stops access through the shared URL. Anyone who already imported the set keeps their private copy.
+                  </p>
+                </>
+              )}
+
+              {shareMessage && (
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  {shareMessage}
+                </p>
+              )}
             </div>
           </div>
         </div>

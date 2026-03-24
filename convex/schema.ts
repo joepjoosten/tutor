@@ -47,6 +47,29 @@ export default defineSchema({
     .index("by_setId_orderIndex", ["setId", "orderIndex"])
     .index("by_userId_setId", ["userId", "setId"]),
 
+  sharedFlashcardSets: defineTable({
+    ownerUserId: v.string(),
+    sourceSetId: v.id("flashcardSets"),
+    slug: v.string(),
+    title: v.string(),
+    description: v.optional(v.string()),
+    flipMode: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    revokedAt: v.optional(v.number()),
+  })
+    .index("by_ownerUserId_createdAt", ["ownerUserId", "createdAt"])
+    .index("by_sourceSetId_createdAt", ["sourceSetId", "createdAt"])
+    .index("by_slug", ["slug"]),
+
+  sharedFlashcards: defineTable({
+    sharedSetId: v.id("sharedFlashcardSets"),
+    question: v.string(),
+    answer: v.string(),
+    orderIndex: v.number(),
+    createdAt: v.number(),
+  }).index("by_sharedSetId_orderIndex", ["sharedSetId", "orderIndex"]),
+
   studyProgress: defineTable({
     userId: v.string(),
     setId: v.id("flashcardSets"),

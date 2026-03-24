@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { handlerOf } from "./testHelpers";
+
 const { mockRequireUser } = vi.hoisted(() => ({
   mockRequireUser: vi.fn(),
 }));
@@ -64,7 +66,7 @@ describe("images", () => {
   it("returns a Convex upload URL for authenticated users", async () => {
     const { ctx, generateUploadUrl: generateUploadUrlMock } = createImagesCtx();
 
-    await expect(generateUploadUrl._handler(ctx as never, {} as never)).resolves.toBe(
+    await expect(handlerOf(generateUploadUrl)(ctx as never, {} as never)).resolves.toBe(
       "https://convex/upload"
     );
 
@@ -89,7 +91,7 @@ describe("images", () => {
     });
 
     await expect(
-      saveUploadedImage._handler(ctx as never, {
+      handlerOf(saveUploadedImage)(ctx as never, {
         storageId: "storage-1" as never,
         filename: "page-1.png",
         mimeType: "image/png",
@@ -116,7 +118,7 @@ describe("images", () => {
     const { ctx } = createImagesCtx();
 
     await expect(
-      saveUploadedImage._handler(ctx as never, {
+      handlerOf(saveUploadedImage)(ctx as never, {
         storageId: "storage-1" as never,
         filename: "page-1.png",
         mimeType: "image/png",
@@ -136,7 +138,7 @@ describe("images", () => {
       },
     });
 
-    await deleteImage._handler(ctx as never, { imageId: "image-1" as never });
+    await handlerOf(deleteImage)(ctx as never, { imageId: "image-1" as never });
 
     expect(storageDelete).toHaveBeenCalledWith("storage-1");
     expect(deleteDoc).toHaveBeenCalledWith("image-1");
@@ -153,7 +155,7 @@ describe("images", () => {
       },
     });
 
-    await deleteImage._handler(ctx as never, { imageId: "image-1" as never });
+    await handlerOf(deleteImage)(ctx as never, { imageId: "image-1" as never });
 
     expect(storageDelete).not.toHaveBeenCalled();
     expect(deleteDoc).not.toHaveBeenCalled();
@@ -171,7 +173,7 @@ describe("images", () => {
     };
 
     await expect(
-      getImagesForGeneration._handler(ctx as never, {
+      handlerOf(getImagesForGeneration)(ctx as never, {
         userId: "user-123",
         imageIds: ["image-2", "image-1"] as never,
       })
@@ -188,7 +190,7 @@ describe("images", () => {
     };
 
     await expect(
-      getImagesForGeneration._handler(ctx as never, {
+      handlerOf(getImagesForGeneration)(ctx as never, {
         userId: "user-123",
         imageIds: ["image-1", "image-2"] as never,
       })
