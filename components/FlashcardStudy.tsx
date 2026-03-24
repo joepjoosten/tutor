@@ -76,6 +76,7 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   const [newAnswer, setNewAnswer] = useState('');
   const [dontKnowCards, setDontKnowCards] = useState<SharedStudyProgress>({});
   const [randomize, setRandomize] = useState(false);
+  const [localFlipMode, setLocalFlipMode] = useState(flipMode);
   const [showDontKnowOnly, setShowDontKnowOnly] = useState(false);
   const [randomSeed, setRandomSeed] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -100,6 +101,10 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   useEffect(() => {
     setFlashcards(initialFlashcards);
   }, [initialFlashcards]);
+
+  useEffect(() => {
+    setLocalFlipMode(flipMode);
+  }, [flipMode]);
 
   useEffect(() => {
     if (props.mode !== 'owner') {
@@ -490,8 +495,8 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
     }
   };
 
-  const getDisplayQuestion = () => flipMode ? currentCard.answer : currentCard.question;
-  const getDisplayAnswer = () => flipMode ? currentCard.question : currentCard.answer;
+  const getDisplayQuestion = () => localFlipMode ? currentCard.answer : currentCard.question;
+  const getDisplayAnswer = () => localFlipMode ? currentCard.question : currentCard.answer;
   const dontKnowCount = Object.values(dontKnowCards).filter((value) => value).length;
 
   const addFlashcardForm = canEdit ? (
@@ -556,7 +561,7 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
 
           <div className="flex flex-col justify-center items-center h-full min-h-[400px]">
             <div className="text-base font-medium text-blue-600 dark:text-blue-400 mb-8">
-              {flipMode ? (
+              {localFlipMode ? (
                 showAnswer ? 'QUESTION' : 'ANSWER'
               ) : (
                 showAnswer ? 'ANSWER' : 'QUESTION'
@@ -626,6 +631,16 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
             }`}
           >
             🔀 Random
+          </button>
+          <button
+            onClick={() => setLocalFlipMode((prev) => !prev)}
+            className={`px-3 py-1 rounded-lg transition-colors text-sm ${
+              localFlipMode
+                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
+            }`}
+          >
+            🔄 Flip
           </button>
           <button
             onClick={() => setShowDontKnowOnly(!showDontKnowOnly)}
@@ -742,7 +757,7 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
 
           <div className="flex flex-col justify-center items-center h-full">
             <div className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-6">
-              {flipMode ? (
+              {localFlipMode ? (
                 showAnswer ? 'QUESTION' : 'ANSWER'
               ) : (
                 showAnswer ? 'ANSWER' : 'QUESTION'

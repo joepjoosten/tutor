@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
 import type { Id } from '@/convex/_generated/dataModel';
 import { api } from '@/convex/_generated/api';
@@ -55,15 +55,19 @@ function mapSet(set: {
 }
 
 export default function FlashcardsPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, isPending: sessionPending } = authClient.useSession();
-  const requestedSetId = searchParams.get('setId') as Id<'flashcardSets'> | null;
+
+  // Derive selected set and view mode entirely from URL
+  const selectedSetId = searchParams.get('setId') as Id<'flashcardSets'> | null;
+  const viewMode = searchParams.get('view'); // 'settings' or null
+
   const rawSets = useQuery(api.flashcards.listFlashcardSets, session ? {} : 'skip');
   const createSet = useMutation(api.flashcards.createFlashcardSet);
   const deleteSet = useMutation(api.flashcards.deleteFlashcardSet);
   const updateSet = useMutation(api.flashcards.updateFlashcardSet);
 
-  const [selectedSetId, setSelectedSetId] = useState<Id<'flashcardSets'> | null>(requestedSetId);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const [isEditingDescription, setIsEditingDescription] = useState(false);
@@ -80,12 +84,6 @@ export default function FlashcardsPage() {
     [selectedSetId, sets]
   );
 
-  useEffect(() => {
-    if (requestedSetId) {
-      setSelectedSetId(requestedSetId);
-    }
-  }, [requestedSetId]);
-
   const loading = sessionPending || (session ? rawSets === undefined : false);
 
   const handleDeleteSet = async (id: Id<'flashcardSets'>) => {
@@ -95,9 +93,7 @@ export default function FlashcardsPage() {
 
     try {
       await deleteSet({ setId: id });
-      if (selectedSetId === id) {
-        setSelectedSetId(null);
-      }
+      router.push('/flashcards');
     } catch (caughtError) {
       alert(
         caughtError instanceof Error
@@ -138,7 +134,7 @@ export default function FlashcardsPage() {
       }
 
       closeCreateSet();
-      setSelectedSetId(createdSet._id);
+      router.push(`/flashcards?setId=${createdSet._id}`);
     } catch (caughtError) {
       setCreateError(
         caughtError instanceof Error
@@ -214,19 +210,6 @@ export default function FlashcardsPage() {
     }
   };
 
-  const toggleFlipMode = async () => {
-    if (!selectedSet) return;
-
-    try {
-      await updateSet({
-        setId: selectedSet.id,
-        flipMode: !selectedSet.flip_mode,
-      });
-    } catch (error) {
-      console.error('Failed to toggle flip mode:', error);
-    }
-  };
-
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
@@ -254,17 +237,19 @@ export default function FlashcardsPage() {
     );
   }
 
-  if (selectedSet) {
+  // Settings view for a selected set
+  if (selectedSet && viewMode === 'settings') {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
           <button
-            onClick={() => setSelectedSetId(null)}
+            onClick={() => router.push('/flashcards')}
             className="text-blue-600 dark:text-blue-400 hover:underline mb-4"
           >
             ← Back to all sets
           </button>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Set Settings</h3>
             {isEditingTitle ? (
               <div className="mb-4">
                 <input
@@ -351,19 +336,6 @@ export default function FlashcardsPage() {
             </p>
 
             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedSet.flip_mode}
-                  onChange={() => void toggleFlipMode()}
-                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  Flip Questions & Answers (show answers as questions)
-                </span>
-              </label>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
               <Link
                 href={`/flashcards/${selectedSet.id}/sharing`}
                 className="inline-flex items-center justify-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200"
@@ -371,7 +343,40 @@ export default function FlashcardsPage() {
                 Manage Sharing
               </Link>
             </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => void handleDeleteSet(selectedSet.id)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
+              >
+                Delete Set
+              </button>
+            </div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Study view for a selected set
+  if (selectedSet) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-6">
+          <button
+            onClick={() => router.push('/flashcards')}
+            className="text-blue-600 dark:text-blue-400 hover:underline mb-4"
+          >
+            ← Back to all sets
+          </button>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {selectedSet.title}
+          </h2>
+          {selectedSet.description && (
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              {selectedSet.description}
+            </p>
+          )}
         </div>
 
         <FlashcardViewer
@@ -384,6 +389,7 @@ export default function FlashcardsPage() {
     );
   }
 
+  // List view
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -513,17 +519,17 @@ export default function FlashcardsPage() {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setSelectedSetId(set.id)}
+                    onClick={() => router.push(`/flashcards?setId=${set.id}`)}
                     className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                   >
                     Study
                   </button>
                   <button
-                    onClick={() => void handleDeleteSet(set.id)}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-                    title="Delete set"
+                    onClick={() => router.push(`/flashcards?setId=${set.id}&view=settings`)}
+                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                    title="Set settings"
                   >
-                    🗑️
+                    ⚙️
                   </button>
                 </div>
               </div>
