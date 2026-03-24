@@ -403,7 +403,7 @@ export default function FlashcardsPage() {
             New Empty Set
           </button>
           <Link
-            href="/"
+            href="/flashcards/generate"
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
           >
             Generate from Images
@@ -484,7 +484,7 @@ export default function FlashcardsPage() {
               New Empty Set
             </button>
             <Link
-              href="/"
+              href="/flashcards/generate"
               className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md transition-colors"
             >
               Generate Flashcards
