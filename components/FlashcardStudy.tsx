@@ -303,45 +303,66 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
     setShowAnswer(!showAnswer);
   };
 
-  const toggleDontKnow = async () => {
-    const newState = !dontKnowCards[currentCard.id];
-    const wasMarked = dontKnowCards[currentCard.id];
-    const isNowKnown = wasMarked && !newState;
-    const nextProgressMap = { ...dontKnowCards };
-
-    if (newState) {
-      nextProgressMap[currentCard.id] = true;
-    } else {
-      delete nextProgressMap[currentCard.id];
+  const markDontKnow = async () => {
+    if (dontKnowCards[currentCard.id]) {
+      nextCard();
+      return;
     }
+
+    const nextProgressMap = { ...dontKnowCards, [currentCard.id]: true };
 
     try {
       if (ownerSetId) {
         await markStudyProgress({
           setId: ownerSetId,
           flashcardId: currentCard.id as Id<'flashcards'>,
-          dontKnow: newState,
+          dontKnow: true,
         });
       }
 
       setDontKnowCards(nextProgressMap);
-
-      if (showDontKnowOnly && isNowKnown) {
-        const remainingCards = visibleCards.filter((card) =>
-          card.id === currentCard.id ? false : nextProgressMap[card.id]
-        );
-
-        if (remainingCards.length === 0) {
-          setCurrentIndex(0);
-        } else if (currentIndex >= remainingCards.length) {
-          setCurrentIndex(remainingCards.length - 1);
-        }
-      } else {
-        nextCard();
-      }
+      nextCard();
     } catch (error) {
       console.error('Failed to update study progress:', error);
     }
+  };
+
+  const markCorrect = async () => {
+    const wasMarked = dontKnowCards[currentCard.id];
+
+    if (wasMarked) {
+      const nextProgressMap = { ...dontKnowCards };
+      delete nextProgressMap[currentCard.id];
+
+      try {
+        if (ownerSetId) {
+          await markStudyProgress({
+            setId: ownerSetId,
+            flashcardId: currentCard.id as Id<'flashcards'>,
+            dontKnow: false,
+          });
+        }
+
+        setDontKnowCards(nextProgressMap);
+
+        if (showDontKnowOnly) {
+          const remainingCards = visibleCards.filter((card) =>
+            card.id === currentCard.id ? false : nextProgressMap[card.id]
+          );
+
+          if (remainingCards.length === 0) {
+            setCurrentIndex(0);
+          } else if (currentIndex >= remainingCards.length) {
+            setCurrentIndex(remainingCards.length - 1);
+          }
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to update study progress:', error);
+      }
+    }
+
+    nextCard();
   };
 
   const resetProgress = async () => {
@@ -590,11 +611,10 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
           />
           <div className="ml-auto flex gap-3">
             <IconKnowButton
-              onClick={() => void toggleDontKnow()}
-              isMarked={!!dontKnowCards[currentCard.id]}
+              onClick={() => void markDontKnow()}
             />
             <IconNavButton
-              onClick={nextCard}
+              onClick={() => void markCorrect()}
               disabled={visibleCards.length <= 1}
               title="Correct"
               direction="next"
@@ -792,18 +812,14 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
             </button>
 
             <button
-              onClick={() => void toggleDontKnow()}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                dontKnowCards[currentCard.id]
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-red-600 text-white hover:bg-red-700'
-              }`}
+              onClick={() => void markDontKnow()}
+              className="px-4 py-2 rounded-lg transition-colors bg-red-600 text-white hover:bg-red-700"
             >
-              {dontKnowCards[currentCard.id] ? '✓ Know' : "✗ Don't Know"}
+              ✗ Don&apos;t Know
             </button>
 
             <button
-              onClick={nextCard}
+              onClick={() => void markCorrect()}
               disabled={visibleCards.length <= 1}
               className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
@@ -980,20 +996,14 @@ function IconNavButton({
 
 function IconKnowButton({
   onClick,
-  isMarked,
 }: {
   onClick: () => void;
-  isMarked: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`p-4 rounded-full transition-colors shadow-lg ${
-        isMarked
-          ? 'bg-green-600 text-white hover:bg-green-700'
-          : 'bg-red-600 text-white hover:bg-red-700'
-      }`}
-      title={isMarked ? 'Mark as known' : "Mark as don't know"}
+      className="p-4 rounded-full transition-colors shadow-lg bg-red-600 text-white hover:bg-red-700"
+      title="Mark as don't know"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -1002,21 +1012,12 @@ function IconKnowButton({
         viewBox="0 0 24 24"
         stroke="currentColor"
       >
-        {isMarked ? (
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2.5}
-            d="M5 13l4 4L19 7"
-          />
-        ) : (
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2.5}
-            d="M6 18L18 6M6 6l12 12"
-          />
-        )}
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2.5}
+          d="M6 18L18 6M6 6l12 12"
+        />
       </svg>
     </button>
   );
