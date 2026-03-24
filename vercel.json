@@ -1,3 +1,3 @@
 {
-  "buildCommand": "npx convex deploy --cmd 'npm run build'"
+  "buildCommand": "npx convex deploy --cmd 'npm run build' && if [ \"$VERCEL_ENV\" = \"preview\" ]; then npx convex import --preview-name \"$VERCEL_GIT_COMMIT_REF\" seed_data.zip; fi"
 }
