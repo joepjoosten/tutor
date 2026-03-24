@@ -80,6 +80,7 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   const [showDontKnowOnly, setShowDontKnowOnly] = useState(false);
   const [randomSeed, setRandomSeed] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
   const [sharedProgressLoaded, setSharedProgressLoaded] = useState(
     props.mode === 'owner'
   );
@@ -171,7 +172,9 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   useEffect(() => {
     const handleFullscreenChange = () => {
       if (!isIOS() || !isPWA()) {
-        setIsFullscreen(!!document.fullscreenElement);
+        const inFullscreen = !!document.fullscreenElement;
+        setIsFullscreen(inFullscreen);
+        setIsNativeFullscreen(inFullscreen);
       }
     };
 
@@ -383,15 +386,18 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
 
   const enterFullscreen = async () => {
     if (isIOS() && isPWA()) {
+      setIsNativeFullscreen(false);
       setIsFullscreen(true);
       return;
     }
 
     try {
       await document.documentElement.requestFullscreen();
+      setIsNativeFullscreen(true);
       setIsFullscreen(true);
     } catch (error) {
       console.error('Failed to enter fullscreen:', error);
+      setIsNativeFullscreen(false);
       setIsFullscreen(true);
     }
   };
@@ -399,6 +405,7 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   const exitFullscreen = async () => {
     if (isIOS() && isPWA()) {
       setIsFullscreen(false);
+      setIsNativeFullscreen(false);
       return;
     }
 
@@ -407,9 +414,11 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
         await document.exitFullscreen();
       }
       setIsFullscreen(false);
+      setIsNativeFullscreen(false);
     } catch (error) {
       console.error('Failed to exit fullscreen:', error);
       setIsFullscreen(false);
+      setIsNativeFullscreen(false);
     }
   };
 
@@ -533,7 +542,8 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
 
   if (isFullscreen) {
     return (
-      <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-between p-8 z-50" style={{
+      <div className={`${isNativeFullscreen ? 'fixed inset-0' : 'fixed left-0 top-0'} bg-gray-900 flex flex-col items-center justify-between p-8 z-50`} style={{
+        ...(!isNativeFullscreen ? { width: '100dvw', height: '100dvh' } : {}),
         paddingTop: 'max(2rem, env(safe-area-inset-top))',
         paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
         paddingLeft: 'max(2rem, env(safe-area-inset-left))',
