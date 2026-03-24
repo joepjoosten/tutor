@@ -46,12 +46,10 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
     flashcards: initialFlashcards,
     flipMode,
     emptyStateDescription,
-    onUpdate,
   } = props;
   const ownerSetId = props.mode === 'owner' ? props.setId : undefined;
   const progressStorageKey =
     props.mode === 'shared' ? props.progressStorageKey : undefined;
-  const canEdit = props.mode === 'owner';
 
   const studyProgress = useQuery(
     api.flashcards.getStudyProgress,
@@ -59,21 +57,11 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   );
   const markStudyProgress = useMutation(api.flashcards.markStudyProgress);
   const resetStudyProgress = useMutation(api.flashcards.resetStudyProgress);
-  const updateFlashcard = useMutation(api.flashcards.updateFlashcard);
-  const deleteFlashcard = useMutation(api.flashcards.deleteFlashcard);
-  const createFlashcard = useMutation(api.flashcards.createFlashcard);
 
   const [flashcards, setFlashcards] = useState(initialFlashcards);
   const [displayOrder, setDisplayOrder] = useState<number[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
-  const [editMode, setEditMode] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedQuestion, setEditedQuestion] = useState('');
-  const [editedAnswer, setEditedAnswer] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
-  const [newQuestion, setNewQuestion] = useState('');
-  const [newAnswer, setNewAnswer] = useState('');
   const [dontKnowCards, setDontKnowCards] = useState<SharedStudyProgress>({});
   const [randomize, setRandomize] = useState(false);
   const [localFlipMode, setLocalFlipMode] = useState(flipMode);
@@ -84,8 +72,6 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   const [sharedProgressLoaded, setSharedProgressLoaded] = useState(
     props.mode === 'owner'
   );
-
-  const notifyUpdate = onUpdate ?? (() => {});
 
   const isIOS = () => {
     if (typeof window === 'undefined') return false;
@@ -194,90 +180,31 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   const visibleCards = getVisibleCards();
 
   if (visibleCards.length === 0) {
-    const defaultEmptyDescription = canEdit
-      ? 'Create the first flashcard in this set without uploading any images.'
-      : 'This shared set does not have any flashcards.';
+    const defaultEmptyDescription =
+      'This set does not have any flashcards yet.';
 
     return (
       <div className="w-full max-w-4xl mx-auto">
-        {isAdding && canEdit ? (
-          <AddFlashcardForm
-            newQuestion={newQuestion}
-            newAnswer={newAnswer}
-            onQuestionChange={setNewQuestion}
-            onAnswerChange={setNewAnswer}
-            onCancel={() => {
-              setIsAdding(false);
-              setNewQuestion('');
-              setNewAnswer('');
-            }}
-            onSave={async () => {
-              if (!newQuestion.trim() || !newAnswer.trim() || !ownerSetId) {
-                alert('Please fill in both question and answer');
-                return;
-              }
-
-              try {
-                const newCard = await createFlashcard({
-                  setId: ownerSetId,
-                  question: newQuestion,
-                  answer: newAnswer,
-                });
-                if (!newCard) {
-                  throw new Error('Card creation failed');
-                }
-                setFlashcards((prev) => [
-                  ...prev,
-                  {
-                    id: newCard._id,
-                    question: newCard.question,
-                    answer: newCard.answer,
-                    order_index: newCard.orderIndex,
-                  },
-                ]);
-                setIsAdding(false);
-                setCurrentIndex(flashcards.length);
-                notifyUpdate();
-              } catch (error) {
-                console.error('Failed to create flashcard:', error);
-                alert('Failed to create flashcard');
-              }
-            }}
-          />
-        ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-10 text-center">
-            <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-3">
-              {showDontKnowOnly ? 'No cards marked for review' : 'This set is empty'}
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              {showDontKnowOnly
-                ? 'Switch back to all cards to continue studying.'
-                : emptyStateDescription ?? defaultEmptyDescription}
-            </p>
-            <div className="flex justify-center gap-3 flex-wrap">
-              {showDontKnowOnly && flashcards.length > 0 && (
-                <button
-                  onClick={() => setShowDontKnowOnly(false)}
-                  className="px-5 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                >
-                  Show All Cards
-                </button>
-              )}
-              {canEdit && (
-                <button
-                  onClick={() => {
-                    setIsAdding(true);
-                    setNewQuestion('');
-                    setNewAnswer('');
-                  }}
-                  className="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  {flashcards.length === 0 ? 'Add First Flashcard' : 'Add Flashcard'}
-                </button>
-              )}
-            </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-10 text-center">
+          <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-3">
+            {showDontKnowOnly ? 'No cards marked for review' : 'This set is empty'}
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            {showDontKnowOnly
+              ? 'Switch back to all cards to continue studying.'
+              : emptyStateDescription ?? defaultEmptyDescription}
+          </p>
+          <div className="flex justify-center gap-3 flex-wrap">
+            {showDontKnowOnly && flashcards.length > 0 && (
+              <button
+                onClick={() => setShowDontKnowOnly(false)}
+                className="px-5 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+              >
+                Show All Cards
+              </button>
+            )}
           </div>
-        )}
+        </div>
       </div>
     );
   }
@@ -422,123 +349,9 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
     }
   };
 
-  const startEditing = () => {
-    setEditedQuestion(currentCard.question);
-    setEditedAnswer(currentCard.answer);
-    setIsEditing(true);
-    setShowAnswer(false);
-  };
-
-  const cancelEditing = () => {
-    setIsEditing(false);
-    setEditedQuestion('');
-    setEditedAnswer('');
-  };
-
-  const saveEdit = async () => {
-    try {
-      const updatedCard = await updateFlashcard({
-        flashcardId: currentCard.id as Id<'flashcards'>,
-        question: editedQuestion,
-        answer: editedAnswer,
-      });
-      if (!updatedCard) {
-        throw new Error('Card update failed');
-      }
-      setFlashcards((prev) => prev.map((card) =>
-        card.id === updatedCard._id
-          ? {
-              id: updatedCard._id,
-              question: updatedCard.question,
-              answer: updatedCard.answer,
-              order_index: updatedCard.orderIndex,
-            }
-          : card
-      ));
-      setIsEditing(false);
-      notifyUpdate();
-    } catch (error) {
-      console.error('Failed to update flashcard:', error);
-      alert('Failed to update flashcard');
-    }
-  };
-
-  const deleteCard = async () => {
-    if (!confirm('Are you sure you want to delete this flashcard?')) return;
-
-    try {
-      await deleteFlashcard({ flashcardId: currentCard.id as Id<'flashcards'> });
-      const newFlashcards = flashcards.filter((card) => card.id !== currentCard.id);
-      setFlashcards(newFlashcards);
-      if (currentIndex >= newFlashcards.length) {
-        setCurrentIndex(Math.max(0, newFlashcards.length - 1));
-      }
-      notifyUpdate();
-    } catch (error) {
-      console.error('Failed to delete flashcard:', error);
-      alert('Failed to delete flashcard');
-    }
-  };
-
-  const startAdding = () => {
-    setIsAdding(true);
-    setNewQuestion('');
-    setNewAnswer('');
-  };
-
-  const cancelAdding = () => {
-    setIsAdding(false);
-    setNewQuestion('');
-    setNewAnswer('');
-  };
-
-  const saveNew = async () => {
-    if (!newQuestion.trim() || !newAnswer.trim() || !ownerSetId) {
-      alert('Please fill in both question and answer');
-      return;
-    }
-
-    try {
-      const newCard = await createFlashcard({
-        setId: ownerSetId,
-        question: newQuestion,
-        answer: newAnswer,
-      });
-      if (!newCard) {
-        throw new Error('Card creation failed');
-      }
-      setFlashcards((prev) => [
-        ...prev,
-        {
-          id: newCard._id,
-          question: newCard.question,
-          answer: newCard.answer,
-          order_index: newCard.orderIndex,
-        },
-      ]);
-      setIsAdding(false);
-      setCurrentIndex(flashcards.length);
-      notifyUpdate();
-    } catch (error) {
-      console.error('Failed to create flashcard:', error);
-      alert('Failed to create flashcard');
-    }
-  };
-
   const getDisplayQuestion = () => localFlipMode ? currentCard.answer : currentCard.question;
   const getDisplayAnswer = () => localFlipMode ? currentCard.question : currentCard.answer;
   const dontKnowCount = Object.values(dontKnowCards).filter((value) => value).length;
-
-  const addFlashcardForm = canEdit ? (
-    <AddFlashcardForm
-      newQuestion={newQuestion}
-      newAnswer={newAnswer}
-      onQuestionChange={setNewQuestion}
-      onAnswerChange={setNewAnswer}
-      onCancel={cancelAdding}
-      onSave={saveNew}
-    />
-  ) : null;
 
   if (isFullscreen) {
     return (
@@ -647,7 +460,7 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
             </span>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => {
               const newRandomize = !randomize;
@@ -656,66 +469,67 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
                 setRandomSeed((prev) => prev + 1);
               }
             }}
-            className={`px-3 py-1 rounded-lg transition-colors text-sm ${
+            className={`px-3 py-1.5 rounded-lg transition-colors text-sm flex items-center gap-1.5 ${
               randomize
                 ? 'bg-purple-600 text-white hover:bg-purple-700'
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
             }`}
+            title="Random order"
           >
-            🔀 Random
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h3l2 5h0M20 4h-3l-2 5h0M4 20h3l2-5h0M20 20h-3l-2-5h0M7 9l3 3-3 3M17 9l-3 3 3 3" />
+            </svg>
+            <span className="hidden sm:inline">Random</span>
           </button>
           <button
             onClick={() => setLocalFlipMode((prev) => !prev)}
-            className={`px-3 py-1 rounded-lg transition-colors text-sm ${
+            className={`px-3 py-1.5 rounded-lg transition-colors text-sm flex items-center gap-1.5 ${
               localFlipMode
                 ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
             }`}
+            title="Flip Q&A"
           >
-            🔄 Flip
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+            </svg>
+            <span className="hidden sm:inline">Flip</span>
           </button>
           <button
             onClick={() => setShowDontKnowOnly(!showDontKnowOnly)}
-            className={`px-3 py-1 rounded-lg transition-colors text-sm ${
+            className={`px-3 py-1.5 rounded-lg transition-colors text-sm flex items-center gap-1.5 ${
               showDontKnowOnly
                 ? 'bg-red-600 text-white hover:bg-red-700'
                 : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
             }`}
             disabled={dontKnowCount === 0}
+            title="Review only"
           >
-            Review Only
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            <span className="hidden sm:inline">Review Only</span>
           </button>
           <button
             onClick={() => void resetProgress()}
-            className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-sm"
+            className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-sm flex items-center gap-1.5"
             disabled={dontKnowCount === 0}
+            title="Reset progress"
           >
-            Reset Progress
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span className="hidden sm:inline">Reset</span>
           </button>
-          {canEdit && (
-            <button
-              onClick={() => {
-                setEditMode(!editMode);
-                setIsEditing(false);
-                setIsAdding(false);
-              }}
-              className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
-                editMode
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
-              }`}
-            >
-              {editMode ? 'Study Mode' : 'Edit Mode'}
-            </button>
-          )}
           <button
             onClick={() => void enterFullscreen()}
-            className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-sm"
+            className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-sm"
             title="Fullscreen mode"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
+              className="h-4 w-4"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -731,136 +545,62 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
         </div>
       </div>
 
-      {isEditing && canEdit ? (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
-          <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Edit Flashcard</h3>
+      <div
+        className="relative bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 min-h-[400px] cursor-pointer transform transition-transform hover:scale-102"
+        onClick={toggleAnswer}
+      >
+        {dontKnowCards[currentCard.id] && (
+          <div className="absolute top-4 right-4 px-3 py-1 bg-red-600 text-white text-xs font-medium rounded-full">
+            Need to review
+          </div>
+        )}
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Question
-              </label>
-              <textarea
-                value={editedQuestion}
-                onChange={(e) => setEditedQuestion(e.target.value)}
-                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[100px] resize-y"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Answer
-              </label>
-              <textarea
-                value={editedAnswer}
-                onChange={(e) => setEditedAnswer(e.target.value)}
-                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[100px] resize-y"
-              />
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={cancelEditing}
-                className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => void saveEdit()}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Save Changes
-              </button>
-            </div>
+        <div className="flex flex-col justify-center items-center h-full">
+          <div className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-6">
+            {localFlipMode ? (
+              showAnswer ? 'QUESTION' : 'ANSWER'
+            ) : (
+              showAnswer ? 'ANSWER' : 'QUESTION'
+            )}
+          </div>
+          <div className="text-3xl md:text-4xl text-center leading-relaxed font-serif">
+            {showAnswer ? (
+              <div className="whitespace-pre-wrap">{getDisplayAnswer()}</div>
+            ) : (
+              <div className="whitespace-pre-wrap">{getDisplayQuestion()}</div>
+            )}
           </div>
         </div>
-      ) : isAdding && canEdit ? (
-        addFlashcardForm
-      ) : (
-        <div
-          className="relative bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 min-h-[400px] cursor-pointer transform transition-transform hover:scale-102"
-          onClick={toggleAnswer}
+
+        <div className="absolute bottom-4 right-4 text-xs text-gray-400">
+          Click to flip
+        </div>
+      </div>
+
+      <div className="flex items-center mt-6 gap-2">
+        <button
+          onClick={prevCard}
+          disabled={visibleCards.length <= 1}
+          className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mr-auto"
         >
-          {dontKnowCards[currentCard.id] && (
-            <div className="absolute top-4 right-4 px-3 py-1 bg-red-600 text-white text-xs font-medium rounded-full">
-              Need to review
-            </div>
-          )}
+          Previous
+        </button>
 
-          <div className="flex flex-col justify-center items-center h-full">
-            <div className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-6">
-              {localFlipMode ? (
-                showAnswer ? 'QUESTION' : 'ANSWER'
-              ) : (
-                showAnswer ? 'ANSWER' : 'QUESTION'
-              )}
-            </div>
-            <div className="text-3xl md:text-4xl text-center leading-relaxed font-serif">
-              {showAnswer ? (
-                <div className="whitespace-pre-wrap">{getDisplayAnswer()}</div>
-              ) : (
-                <div className="whitespace-pre-wrap">{getDisplayQuestion()}</div>
-              )}
-            </div>
-          </div>
+        <button
+          onClick={() => void markDontKnow()}
+          className="px-4 py-2 rounded-lg transition-colors bg-red-600 text-white hover:bg-red-700"
+        >
+          ✗ Don&apos;t Know
+        </button>
 
-          <div className="absolute bottom-4 right-4 text-xs text-gray-400">
-            Click to flip
-          </div>
-        </div>
-      )}
-
-      {!isEditing && !isAdding && (
-        <>
-          <div className="flex items-center mt-6 gap-2">
-            <button
-              onClick={prevCard}
-              disabled={visibleCards.length <= 1}
-              className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mr-auto"
-            >
-              Previous
-            </button>
-
-            <button
-              onClick={() => void markDontKnow()}
-              className="px-4 py-2 rounded-lg transition-colors bg-red-600 text-white hover:bg-red-700"
-            >
-              ✗ Don&apos;t Know
-            </button>
-
-            <button
-              onClick={() => void markCorrect()}
-              disabled={visibleCards.length <= 1}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Correct
-            </button>
-          </div>
-
-          {editMode && canEdit && (
-            <div className="flex justify-center gap-3 mt-4">
-              <button
-                onClick={startEditing}
-                className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm"
-              >
-                Edit Card
-              </button>
-              <button
-                onClick={() => void deleteCard()}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-              >
-                Delete Card
-              </button>
-              <button
-                onClick={startAdding}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
-              >
-                Add New Card
-              </button>
-            </div>
-          )}
-        </>
-      )}
+        <button
+          onClick={() => void markCorrect()}
+          disabled={visibleCards.length <= 1}
+          className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          Correct
+        </button>
+      </div>
 
       <div className="mt-4 flex gap-2 justify-center flex-wrap">
         {displayOrder.map((orderIdx, idx) => {
@@ -885,69 +625,6 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
             </button>
           );
         })}
-      </div>
-    </div>
-  );
-}
-
-function AddFlashcardForm({
-  newQuestion,
-  newAnswer,
-  onQuestionChange,
-  onAnswerChange,
-  onCancel,
-  onSave,
-}: {
-  newQuestion: string;
-  newAnswer: string;
-  onQuestionChange: (value: string) => void;
-  onAnswerChange: (value: string) => void;
-  onCancel: () => void;
-  onSave: () => void | Promise<void>;
-}) {
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
-      <h3 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Add New Flashcard</h3>
-
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Question
-          </label>
-          <textarea
-            value={newQuestion}
-            onChange={(e) => onQuestionChange(e.target.value)}
-            placeholder="Enter the question..."
-            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[100px] resize-y"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Answer
-          </label>
-          <textarea
-            value={newAnswer}
-            onChange={(e) => onAnswerChange(e.target.value)}
-            placeholder="Enter the answer..."
-            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[100px] resize-y"
-          />
-        </div>
-
-        <div className="flex gap-3 justify-end">
-          <button
-            onClick={onCancel}
-            className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => void onSave()}
-            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-          >
-            Add Flashcard
-          </button>
-        </div>
       </div>
     </div>
   );
