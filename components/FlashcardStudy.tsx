@@ -576,24 +576,26 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
           </div>
         </div>
 
-        <div className="flex justify-center items-center w-full gap-3">
+        <div className="flex items-center w-full gap-3">
           <IconNavButton
             onClick={prevCard}
             disabled={visibleCards.length <= 1}
             title="Previous card"
             direction="prev"
           />
-          <IconFlipButton onClick={toggleAnswer} showAnswer={showAnswer} />
-          <IconKnowButton
-            onClick={() => void toggleDontKnow()}
-            isMarked={!!dontKnowCards[currentCard.id]}
-          />
-          <IconNavButton
-            onClick={nextCard}
-            disabled={visibleCards.length <= 1}
-            title="Next card"
-            direction="next"
-          />
+          <div className="ml-auto flex gap-3">
+            <IconKnowButton
+              onClick={() => void toggleDontKnow()}
+              isMarked={!!dontKnowCards[currentCard.id]}
+            />
+            <IconNavButton
+              onClick={nextCard}
+              disabled={visibleCards.length <= 1}
+              title="Correct"
+              direction="next"
+              variant="correct"
+            />
+          </div>
         </div>
       </div>
     );
@@ -765,40 +767,32 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
 
       {!isEditing && !isAdding && (
         <>
-          <div className="flex justify-between items-center mt-6 gap-2">
+          <div className="flex items-center mt-6 gap-2">
             <button
               onClick={prevCard}
               disabled={visibleCards.length <= 1}
-              className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mr-auto"
             >
               Previous
             </button>
 
-            <div className="flex gap-2">
-              <button
-                onClick={toggleAnswer}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                {showAnswer ? 'Show Question' : 'Show Answer'}
-              </button>
-              <button
-                onClick={() => void toggleDontKnow()}
-                className={`px-4 py-2 rounded-lg transition-colors ${
-                  dontKnowCards[currentCard.id]
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : 'bg-red-600 text-white hover:bg-red-700'
-                }`}
-              >
-                {dontKnowCards[currentCard.id] ? '✓ Know' : "✗ Don't Know"}
-              </button>
-            </div>
+            <button
+              onClick={() => void toggleDontKnow()}
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                dontKnowCards[currentCard.id]
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-red-600 text-white hover:bg-red-700'
+              }`}
+            >
+              {dontKnowCards[currentCard.id] ? '✓ Know' : "✗ Don't Know"}
+            </button>
 
             <button
               onClick={nextCard}
               disabled={visibleCards.length <= 1}
-              className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              Next
+              Correct
             </button>
           </div>
 
@@ -923,17 +917,23 @@ function IconNavButton({
   disabled,
   title,
   direction,
+  variant,
 }: {
   onClick: () => void;
   disabled: boolean;
   title: string;
   direction: 'prev' | 'next';
+  variant?: 'correct';
 }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className="p-4 bg-gray-700 text-white rounded-full hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-lg"
+      className={`p-4 rounded-full disabled:opacity-30 disabled:cursor-not-allowed transition-colors shadow-lg ${
+        variant === 'correct'
+          ? 'bg-green-600 text-white hover:bg-green-700'
+          : 'bg-gray-700 text-white hover:bg-gray-600'
+      }`}
       title={title}
     >
       <svg
@@ -958,37 +958,6 @@ function IconNavButton({
             d="M9 5l7 7-7 7"
           />
         )}
-      </svg>
-    </button>
-  );
-}
-
-function IconFlipButton({
-  onClick,
-  showAnswer,
-}: {
-  onClick: () => void;
-  showAnswer: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="p-4 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors shadow-lg"
-      title={showAnswer ? 'Show question' : 'Show answer'}
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        className="h-7 w-7"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-        />
       </svg>
     </button>
   );
