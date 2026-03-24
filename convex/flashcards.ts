@@ -59,6 +59,28 @@ export const listFlashcardSets = query({
   },
 });
 
+export const getFlashcardSet = query({
+  args: {
+    setId: v.id("flashcardSets"),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx);
+    const set = await ctx.db.get(args.setId);
+    if (!set || set.userId !== userId) {
+      return null;
+    }
+    const flashcards = await ctx.db
+      .query("flashcards")
+      .withIndex("by_setId_orderIndex", (q) => q.eq("setId", args.setId))
+      .collect();
+
+    return {
+      ...set,
+      flashcards: flashcards.filter((card) => card.deletedAt === undefined),
+    };
+  },
+});
+
 export const getRecentInstructions = query({
   args: {},
   handler: async (ctx) => {
