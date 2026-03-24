@@ -61,7 +61,7 @@ export default function SharedFlashcardPage({ slug }: SharedFlashcardPageProps) 
         throw new Error('Failed to import shared set');
       }
 
-      router.push(`/flashcards?setId=${importedSet._id}`);
+      router.push(`/flashcards/${importedSet._id}/study`);
     } catch (caughtError) {
       setImportError(
         caughtError instanceof Error
@@ -76,63 +76,59 @@ export default function SharedFlashcardPage({ slug }: SharedFlashcardPageProps) 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">
-              Shared Flashcards
-            </p>
-            <h2 className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
-              {sharedSet.title}
-            </h2>
-            {sharedSet.description ? (
-              <p className="mt-3 text-gray-600 dark:text-gray-400">
-                {sharedSet.description}
-              </p>
-            ) : (
-              <p className="mt-3 text-gray-400 dark:text-gray-500 italic">
-                No description
-              </p>
-            )}
-            <p className="mt-4 text-sm text-gray-500 dark:text-gray-500">
-              {flashcards.length} flashcard{flashcards.length !== 1 ? 's' : ''}. Progress for this link is stored only on this device until you explicitly import it.
-            </p>
-          </div>
+        <p className="text-sm font-medium uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">
+          Shared Flashcards
+        </p>
+        <h2 className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+          {sharedSet.title}
+        </h2>
+        {sharedSet.description ? (
+          <p className="mt-3 text-gray-600 dark:text-gray-400">
+            {sharedSet.description}
+          </p>
+        ) : (
+          <p className="mt-3 text-gray-400 dark:text-gray-500 italic">
+            No description
+          </p>
+        )}
+        <p className="mt-4 text-sm text-gray-500 dark:text-gray-500">
+          {flashcards.length} flashcard{flashcards.length !== 1 ? 's' : ''}. Progress for this link is stored only on this device until you explicitly import it.
+        </p>
+      </div>
 
-          <div className="w-full lg:max-w-sm">
-            {session ? (
-              <>
-                <button
-                  onClick={() => void handleImport()}
-                  disabled={isImporting}
-                  className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors disabled:opacity-50"
-                >
-                  {isImporting ? 'Importing...' : 'Import This Set'}
-                </button>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Import creates a private copy in your library. Until you do that, this page behaves like an anonymous shared set.
-                </p>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/"
-                  className="block w-full px-4 py-3 text-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
-                >
-                  Sign In to Import
-                </Link>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  You can study this shared set without signing in. Sign in only if you want to save your own editable copy.
-                </p>
-              </>
-            )}
+      <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl shadow-md p-6">
+        {session ? (
+          <>
+            <button
+              onClick={() => void handleImport()}
+              disabled={isImporting}
+              className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors disabled:opacity-50"
+            >
+              {isImporting ? 'Importing...' : 'Import This Set'}
+            </button>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              Import creates a private copy in your library. Until you do that, this page behaves like an anonymous shared set.
+            </p>
+          </>
+        ) : (
+          <>
+            <Link
+              href="/"
+              className="block w-full px-4 py-3 text-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors"
+            >
+              Sign In to Import
+            </Link>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              You can study this shared set without signing in. Sign in only if you want to save your own editable copy.
+            </p>
+          </>
+        )}
 
-            {importError && (
-              <div className="mt-3 p-3 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded-lg text-sm">
-                {importError}
-              </div>
-            )}
+        {importError && (
+          <div className="mt-3 p-3 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded-lg text-sm">
+            {importError}
           </div>
-        </div>
+        )}
       </div>
 
       <SharedFlashcardViewer

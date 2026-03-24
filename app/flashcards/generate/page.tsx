@@ -151,7 +151,7 @@ export default function GenerateFromImagesPage() {
 
           <div className="flex justify-center gap-3 flex-wrap">
             <button
-              onClick={() => router.push(`/flashcards?setId=${setId}`)}
+              onClick={() => router.push(`/flashcards/${setId}/study`)}
               className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg shadow-md transition-colors"
             >
               View in My Flashcards

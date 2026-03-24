@@ -2,106 +2,28 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
-import type { Id } from '@/convex/_generated/dataModel';
 import { api } from '@/convex/_generated/api';
 import { authClient } from '@/lib/auth-client';
 import AuthCard from '@/components/AuthCard';
-import FlashcardViewer from '@/components/FlashcardViewer';
-
-interface Flashcard {
-  id: Id<'flashcards'>;
-  question: string;
-  answer: string;
-  order_index: number;
-}
-
-interface FlashcardSet {
-  id: Id<'flashcardSets'>;
-  title: string;
-  description: string | null;
-  flip_mode: boolean;
-  created_at: number;
-  flashcards: Flashcard[];
-}
-
-function mapSet(set: {
-  _id: Id<'flashcardSets'>;
-  title: string;
-  description?: string;
-  flipMode: boolean;
-  createdAt: number;
-  flashcards: Array<{
-    _id: Id<'flashcards'>;
-    question: string;
-    answer: string;
-    orderIndex: number;
-  }>;
-}): FlashcardSet {
-  return {
-    id: set._id,
-    title: set.title,
-    description: set.description ?? null,
-    flip_mode: set.flipMode,
-    created_at: set.createdAt,
-    flashcards: set.flashcards.map((card) => ({
-      id: card._id,
-      question: card.question,
-      answer: card.answer,
-      order_index: card.orderIndex,
-    })),
-  };
-}
 
 export default function FlashcardsPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { data: session, isPending: sessionPending } = authClient.useSession();
-
-  // Derive selected set and view mode entirely from URL
-  const selectedSetId = searchParams.get('setId') as Id<'flashcardSets'> | null;
-  const viewMode = searchParams.get('view'); // 'settings' or null
 
   const rawSets = useQuery(api.flashcards.listFlashcardSets, session ? {} : 'skip');
   const createSet = useMutation(api.flashcards.createFlashcardSet);
-  const deleteSet = useMutation(api.flashcards.deleteFlashcardSet);
-  const updateSet = useMutation(api.flashcards.updateFlashcardSet);
 
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editedTitle, setEditedTitle] = useState('');
-  const [isEditingDescription, setIsEditingDescription] = useState(false);
-  const [editedDescription, setEditedDescription] = useState('');
   const [isCreatingSet, setIsCreatingSet] = useState(false);
   const [newSetTitle, setNewSetTitle] = useState('');
   const [newSetDescription, setNewSetDescription] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
   const [creatingSet, setCreatingSet] = useState(false);
 
-  const sets = useMemo(() => (rawSets ?? []).map(mapSet), [rawSets]);
-  const selectedSet = useMemo(
-    () => sets.find((set: FlashcardSet) => set.id === selectedSetId) ?? null,
-    [selectedSetId, sets]
-  );
+  const sets = useMemo(() => rawSets ?? [], [rawSets]);
 
   const loading = sessionPending || (session ? rawSets === undefined : false);
-
-  const handleDeleteSet = async (id: Id<'flashcardSets'>) => {
-    if (!confirm('Are you sure you want to delete this flashcard set?')) {
-      return;
-    }
-
-    try {
-      await deleteSet({ setId: id });
-      router.push('/flashcards');
-    } catch (caughtError) {
-      alert(
-        caughtError instanceof Error
-          ? caughtError.message
-          : 'Failed to delete flashcard set'
-      );
-    }
-  };
 
   const openCreateSet = () => {
     setIsCreatingSet(true);
@@ -134,7 +56,7 @@ export default function FlashcardsPage() {
       }
 
       closeCreateSet();
-      router.push(`/flashcards?setId=${createdSet._id}`);
+      router.push(`/flashcards/${createdSet._id}/study`);
     } catch (caughtError) {
       setCreateError(
         caughtError instanceof Error
@@ -154,60 +76,6 @@ export default function FlashcardsPage() {
       hour: '2-digit',
       minute: '2-digit',
     });
-  };
-
-  const startEditingTitle = () => {
-    if (selectedSet) {
-      setEditedTitle(selectedSet.title);
-      setIsEditingTitle(true);
-    }
-  };
-
-  const cancelEditingTitle = () => {
-    setIsEditingTitle(false);
-    setEditedTitle('');
-  };
-
-  const saveTitle = async () => {
-    if (!selectedSet || !editedTitle.trim()) return;
-
-    try {
-      await updateSet({
-        setId: selectedSet.id,
-        title: editedTitle.trim(),
-      });
-      setIsEditingTitle(false);
-    } catch (error) {
-      console.error('Failed to update set title:', error);
-      alert('Failed to update set title');
-    }
-  };
-
-  const startEditingDescription = () => {
-    if (selectedSet) {
-      setEditedDescription(selectedSet.description || '');
-      setIsEditingDescription(true);
-    }
-  };
-
-  const cancelEditingDescription = () => {
-    setIsEditingDescription(false);
-    setEditedDescription('');
-  };
-
-  const saveDescription = async () => {
-    if (!selectedSet) return;
-
-    try {
-      await updateSet({
-        setId: selectedSet.id,
-        description: editedDescription.trim() || null,
-      });
-      setIsEditingDescription(false);
-    } catch (error) {
-      console.error('Failed to update set description:', error);
-      alert('Failed to update set description');
-    }
   };
 
   if (loading) {
@@ -237,159 +105,6 @@ export default function FlashcardsPage() {
     );
   }
 
-  // Settings view for a selected set
-  if (selectedSet && viewMode === 'settings') {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <button
-            onClick={() => router.push('/flashcards')}
-            className="text-blue-600 dark:text-blue-400 hover:underline mb-4"
-          >
-            ← Back to all sets
-          </button>
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Set Settings</h3>
-            {isEditingTitle ? (
-              <div className="mb-4">
-                <input
-                  type="text"
-                  value={editedTitle}
-                  onChange={(e) => setEditedTitle(e.target.value)}
-                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xl font-bold"
-                />
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={() => void saveTitle()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={cancelEditingTitle}
-                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-between items-start mb-2">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {selectedSet.title}
-                </h2>
-                <button
-                  onClick={startEditingTitle}
-                  className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-                >
-                  Edit Title
-                </button>
-              </div>
-            )}
-            {isEditingDescription ? (
-              <div className="mb-4">
-                <textarea
-                  value={editedDescription}
-                  onChange={(e) => setEditedDescription(e.target.value)}
-                  placeholder="Add a description (optional)"
-                  className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[80px] resize-y"
-                />
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={() => void saveDescription()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={cancelEditingDescription}
-                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex justify-between items-start mb-2">
-                {selectedSet.description ? (
-                  <p className="text-gray-600 dark:text-gray-400 flex-1">
-                    {selectedSet.description}
-                  </p>
-                ) : (
-                  <p className="text-gray-400 dark:text-gray-500 italic flex-1">
-                    No description
-                  </p>
-                )}
-                <button
-                  onClick={startEditingDescription}
-                  className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600 ml-2"
-                >
-                  {selectedSet.description ? 'Edit' : 'Add'}
-                </button>
-              </div>
-            )}
-            <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-              Created: {formatDate(selectedSet.created_at)}
-            </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-              {selectedSet.flashcards.length} flashcard{selectedSet.flashcards.length !== 1 ? 's' : ''}
-            </p>
-
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <Link
-                href={`/flashcards/${selectedSet.id}/sharing`}
-                className="inline-flex items-center justify-center rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200"
-              >
-                Manage Sharing
-              </Link>
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => void handleDeleteSet(selectedSet.id)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
-              >
-                Delete Set
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Study view for a selected set
-  if (selectedSet) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <button
-            onClick={() => router.push('/flashcards')}
-            className="text-blue-600 dark:text-blue-400 hover:underline mb-4"
-          >
-            ← Back to all sets
-          </button>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {selectedSet.title}
-          </h2>
-          {selectedSet.description && (
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              {selectedSet.description}
-            </p>
-          )}
-        </div>
-
-        <FlashcardViewer
-          flashcards={selectedSet.flashcards}
-          setId={selectedSet.id}
-          flipMode={selectedSet.flip_mode}
-          onUpdate={() => {}}
-        />
-      </div>
-    );
-  }
-
-  // List view
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -499,9 +214,9 @@ export default function FlashcardsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sets.map((set: FlashcardSet) => (
+          {sets.map((set) => (
             <div
-              key={set.id}
+              key={set._id}
               className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden"
             >
               <div className="p-6">
@@ -515,22 +230,22 @@ export default function FlashcardsPage() {
                 )}
                 <div className="text-sm text-gray-500 dark:text-gray-500 mb-4">
                   <div>{set.flashcards.length} cards</div>
-                  <div>{formatDate(set.created_at)}</div>
+                  <div>{formatDate(set.createdAt)}</div>
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => router.push(`/flashcards?setId=${set.id}`)}
-                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                  <Link
+                    href={`/flashcards/${set._id}/study`}
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-center"
                   >
                     Study
-                  </button>
-                  <button
-                    onClick={() => router.push(`/flashcards?setId=${set.id}&view=settings`)}
+                  </Link>
+                  <Link
+                    href={`/flashcards/${set._id}/settings`}
                     className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg transition-colors"
                     title="Set settings"
                   >
                     ⚙️
-                  </button>
+                  </Link>
                 </div>
               </div>
             </div>
