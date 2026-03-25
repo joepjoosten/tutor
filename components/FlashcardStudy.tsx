@@ -577,29 +577,76 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
         </div>
       </div>
 
-      <div className="flex items-center mt-6 gap-2">
+      <div className="mt-6 flex items-center gap-2">
         <button
           onClick={prevCard}
           disabled={visibleCards.length <= 1}
-          className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mr-auto"
+          className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-200 text-gray-800 transition-colors hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 sm:mr-auto sm:h-auto sm:w-auto sm:gap-2 sm:px-6 sm:py-2"
+          title="Previous"
         >
-          Previous
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5 flex-shrink-0"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2.5}
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+          <span className="hidden sm:inline">Previous</span>
         </button>
 
-        <button
-          onClick={() => void markDontKnow()}
-          className="px-4 py-2 rounded-lg transition-colors bg-red-600 text-white hover:bg-red-700"
-        >
-          ✗ Don&apos;t Know
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => void markDontKnow()}
+            className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-600 text-white transition-colors hover:bg-red-700 sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-2"
+            title="Don't know"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+            <span className="hidden sm:inline">Don&apos;t Know</span>
+          </button>
 
-        <button
-          onClick={() => void markCorrect()}
-          disabled={visibleCards.length <= 1}
-          className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          Correct
-        </button>
+          <button
+            onClick={() => void markCorrect()}
+            disabled={visibleCards.length <= 1}
+            className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-600 text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50 sm:h-auto sm:w-auto sm:gap-2 sm:px-6 sm:py-2"
+            title="Correct"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+            <span className="hidden sm:inline">Correct</span>
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 flex gap-2 justify-center flex-wrap">
