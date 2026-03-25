@@ -355,14 +355,14 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
 
   if (isFullscreen) {
     return (
-      <div className={`${isNativeFullscreen ? 'fixed inset-0' : 'fixed left-0 top-0'} bg-gray-900 flex flex-col items-center justify-between p-8 z-50`} style={{
+      <div className={`${isNativeFullscreen ? 'fixed inset-0' : 'fixed left-0 top-0'} bg-gray-900 flex flex-col items-center gap-4 p-4 sm:p-8 z-50`} style={{
         ...(!isNativeFullscreen ? { width: '100dvw', height: '100dvh' } : {}),
-        paddingTop: 'max(2rem, env(safe-area-inset-top))',
-        paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
-        paddingLeft: 'max(2rem, env(safe-area-inset-left))',
-        paddingRight: 'max(2rem, env(safe-area-inset-right))',
+        paddingTop: 'max(1rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
+        paddingLeft: 'max(1rem, env(safe-area-inset-left))',
+        paddingRight: 'max(1rem, env(safe-area-inset-right))',
       }}>
-        <div className="w-full flex justify-between items-center">
+        <div className="w-full flex justify-between items-center flex-shrink-0">
           <div className="text-white text-lg font-medium">
             Card {currentIndex + 1} of {visibleCards.length}
             {dontKnowCount > 0 && (
@@ -394,24 +394,24 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
         </div>
 
         <div
-          className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-16 max-w-4xl w-full cursor-pointer transform transition-transform hover:scale-102"
+          className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 sm:p-16 max-w-4xl w-full cursor-pointer transform transition-transform hover:scale-102 flex-1 min-h-0 overflow-auto"
           onClick={toggleAnswer}
         >
           {dontKnowCards[currentCard.id] && (
-            <div className="absolute top-6 right-6 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-full">
+            <div className="absolute top-4 right-4 sm:top-6 sm:right-6 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-full">
               Need to review
             </div>
           )}
 
-          <div className="flex flex-col justify-center items-center h-full min-h-[400px]">
-            <div className="text-base font-medium text-blue-600 dark:text-blue-400 mb-8">
+          <div className="flex flex-col justify-center items-center h-full">
+            <div className="text-base font-medium text-blue-600 dark:text-blue-400 mb-4 sm:mb-8">
               {localFlipMode ? (
                 showAnswer ? 'QUESTION' : 'ANSWER'
               ) : (
                 showAnswer ? 'ANSWER' : 'QUESTION'
               )}
             </div>
-            <div className="text-4xl md:text-5xl text-center leading-relaxed font-serif">
+            <div className="text-3xl sm:text-4xl md:text-5xl text-center leading-relaxed font-serif">
               {showAnswer ? (
                 <div className="whitespace-pre-wrap">{getDisplayAnswer()}</div>
               ) : (
@@ -420,12 +420,12 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
             </div>
           </div>
 
-          <div className="absolute bottom-6 right-6 text-sm text-gray-400">
+          <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 text-sm text-gray-400">
             Click to flip
           </div>
         </div>
 
-        <div className="flex items-center w-full gap-3">
+        <div className="flex items-center w-full gap-3 flex-shrink-0">
           <IconNavButton
             onClick={prevCard}
             disabled={visibleCards.length <= 1}
