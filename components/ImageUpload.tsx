@@ -231,7 +231,6 @@ export default function ImageUpload({ onImagesChange }: ImageUploadProps) {
         <input
           type="file"
           accept="image/*"
-          capture="environment"
           multiple
           onChange={handleFileChange}
           disabled={uploading}
