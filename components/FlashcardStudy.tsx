@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import type { Id } from '@/convex/_generated/dataModel';
 import { api } from '@/convex/_generated/api';
@@ -41,6 +41,19 @@ type FlashcardStudyProps =
   | OwnerFlashcardStudyProps
   | SharedFlashcardStudyProps;
 
+function shuffleIds(ids: string[]) {
+  const shuffled = [...ids];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
+function arraysEqual<T>(first: T[], second: T[]) {
+  return first.length === second.length && first.every((value, index) => value === second[index]);
+}
+
 export default function FlashcardStudy(props: FlashcardStudyProps) {
   const {
     flashcards: initialFlashcards,
@@ -59,14 +72,13 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   const resetStudyProgress = useMutation(api.flashcards.resetStudyProgress);
 
   const [flashcards, setFlashcards] = useState(initialFlashcards);
-  const [displayOrder, setDisplayOrder] = useState<number[]>([]);
+  const [displayOrder, setDisplayOrder] = useState<string[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [dontKnowCards, setDontKnowCards] = useState<SharedStudyProgress>({});
   const [randomize, setRandomize] = useState(false);
   const [localFlipMode, setLocalFlipMode] = useState(flipMode);
   const [showDontKnowOnly, setShowDontKnowOnly] = useState(false);
-  const [randomSeed, setRandomSeed] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
   const [sharedProgressLoaded, setSharedProgressLoaded] = useState(
@@ -135,25 +147,50 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
     );
   }, [dontKnowCards, progressStorageKey, props.mode, sharedProgressLoaded]);
 
+  const visibleCards = useMemo(
+    () =>
+      showDontKnowOnly
+        ? flashcards.filter((card) => dontKnowCards[card.id])
+        : flashcards,
+    [dontKnowCards, flashcards, showDontKnowOnly]
+  );
+  const visibleCardIds = useMemo(
+    () => visibleCards.map((card) => card.id),
+    [visibleCards]
+  );
+  const visibleCardIdKey = visibleCardIds.join('\u0000');
+  const visibleCardsById = useMemo(
+    () => new Map(visibleCards.map((card) => [card.id, card])),
+    [visibleCards]
+  );
+  const visibleCardIdSet = useMemo(
+    () => new Set(visibleCardIds),
+    [visibleCardIds]
+  );
+  const activeDisplayOrder = useMemo(
+    () => displayOrder.filter((cardId) => visibleCardIdSet.has(cardId)),
+    [displayOrder, visibleCardIdSet]
+  );
+
   useEffect(() => {
-    let cardsToShow = flashcards;
+    setDisplayOrder((previousOrder) => {
+      if (!randomize) {
+        return arraysEqual(previousOrder, visibleCardIds) ? previousOrder : visibleCardIds;
+      }
 
-    if (showDontKnowOnly) {
-      cardsToShow = flashcards.filter((card) => dontKnowCards[card.id]);
+      const previousVisibleOrder = previousOrder.filter((cardId) => visibleCardIdSet.has(cardId));
+      const missingIds = visibleCardIds.filter((cardId) => !previousVisibleOrder.includes(cardId));
+      const nextOrder = [...previousVisibleOrder, ...missingIds];
+
+      return arraysEqual(previousOrder, nextOrder) ? previousOrder : nextOrder;
+    });
+
+    if (visibleCardIds.length > 0) {
+      setCurrentIndex((previousIndex) =>
+        Math.min(previousIndex, visibleCardIds.length - 1)
+      );
     }
-
-    let order = cardsToShow.map((_, idx) => idx);
-
-    if (randomize) {
-      order = [...order].sort(() => Math.random() - 0.5);
-    }
-
-    setDisplayOrder(order);
-
-    if (cardsToShow.length > 0 && currentIndex >= cardsToShow.length) {
-      setCurrentIndex(Math.max(0, cardsToShow.length - 1));
-    }
-  }, [currentIndex, dontKnowCards, flashcards, randomize, randomSeed, showDontKnowOnly]);
+  }, [randomize, visibleCardIdKey, visibleCardIdSet, visibleCardIds]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -169,15 +206,6 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, []);
-
-  const getVisibleCards = () => {
-    if (showDontKnowOnly) {
-      return flashcards.filter((card) => dontKnowCards[card.id]);
-    }
-    return flashcards;
-  };
-
-  const visibleCards = getVisibleCards();
 
   if (visibleCards.length === 0) {
     const defaultEmptyDescription =
@@ -209,7 +237,8 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
     );
   }
 
-  const currentCard = visibleCards[displayOrder[currentIndex] || 0];
+  const currentCardId = activeDisplayOrder[currentIndex] ?? visibleCardIds[currentIndex] ?? visibleCardIds[0];
+  const currentCard = currentCardId ? visibleCardsById.get(currentCardId) : undefined;
 
   if (!currentCard) {
     return (
@@ -465,9 +494,9 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
             onClick={() => {
               const newRandomize = !randomize;
               setRandomize(newRandomize);
-              if (newRandomize) {
-                setRandomSeed((prev) => prev + 1);
-              }
+              setDisplayOrder(newRandomize ? shuffleIds(visibleCardIds) : visibleCardIds);
+              setCurrentIndex(0);
+              setShowAnswer(false);
             }}
             className={`px-3 py-1.5 rounded-lg transition-colors text-sm flex items-center gap-1.5 ${
               randomize
@@ -650,8 +679,8 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
       </div>
 
       <div className="mt-4 flex gap-2 justify-center flex-wrap">
-        {displayOrder.map((orderIdx, idx) => {
-          const card = visibleCards[orderIdx];
+        {activeDisplayOrder.map((cardId, idx) => {
+          const card = visibleCardsById.get(cardId);
           if (!card) return null;
           return (
             <button
