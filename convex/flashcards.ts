@@ -318,6 +318,7 @@ export const markStudyProgress = mutation({
     const userId = await requireUser(ctx);
     await requireOwnedSet(ctx, userId, args.setId);
     await requireOwnedCard(ctx, userId, args.flashcardId);
+    await ctx.db.patch(args.setId, { lastStudiedAt: Date.now() });
 
     const existing = await ctx.db
       .query("studyProgress")
