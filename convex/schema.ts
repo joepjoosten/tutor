@@ -80,6 +80,24 @@ export default defineSchema({
     .index("by_userId_setId", ["userId", "setId"])
     .index("by_userId_setId_flashcardId", ["userId", "setId", "flashcardId"]),
 
+  chatMessages: defineTable({
+    userId: v.string(),
+    setId: v.id("flashcardSets"),
+    role: v.union(v.literal("user"), v.literal("assistant")),
+    content: v.string(),
+    toolActions: v.optional(
+      v.array(
+        v.object({
+          tool: v.string(),
+          summary: v.string(),
+        })
+      )
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_setId_createdAt", ["setId", "createdAt"])
+    .index("by_userId_setId", ["userId", "setId"]),
+
   userSettings: defineTable({
     userId: v.string(),
     openRouterKeyCiphertext: v.optional(v.string()),

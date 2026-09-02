@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAction } from 'convex/react';
+import { useAction, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { authClient } from '@/lib/auth-client';
@@ -10,6 +11,7 @@ import AuthCard from '@/components/AuthCard';
 import ImageUpload from '@/components/ImageUpload';
 import ModelSelector from '@/components/ModelSelector';
 import FlashcardViewer from '@/components/FlashcardViewer';
+import FlashcardChat from '@/components/FlashcardChat';
 
 interface UploadedImage {
   id: Id<'images'>;
@@ -37,6 +39,7 @@ export default function GenerateFromImagesPage() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const router = useRouter();
   const generateFlashcards = useAction(api.generation.generateFlashcards);
+  const settings = useQuery(api.settings.getUserSettings, session ? {} : 'skip');
 
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
@@ -44,6 +47,13 @@ export default function GenerateFromImagesPage() {
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<GeneratedResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Once a set exists, read it live so edits made through the chat show up.
+  const generatedSetId = result?.flashcardSet?._id;
+  const liveSet = useQuery(
+    api.flashcards.getFlashcardSet,
+    generatedSetId ? { setId: generatedSetId } : 'skip'
+  );
 
   const handleImagesChange = (newImages: UploadedImage[]) => {
     setImages(newImages);
@@ -105,9 +115,40 @@ export default function GenerateFromImagesPage() {
     );
   }
 
+  if (settings === undefined) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-12 text-center text-gray-600 dark:text-gray-300">
+        Loading...
+      </div>
+    );
+  }
+
+  if (!settings.hasOpenRouterKey) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 text-center">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Add an AI key to generate flashcards
+          </h2>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            Generating flashcards from images uses your own OpenRouter API key.
+          </p>
+          <Link
+            href="/settings"
+            className="mt-6 inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md transition-colors"
+          >
+            Go to Settings
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (result?.flashcardSet) {
     const setId = result.flashcardSet._id;
-    const mappedCards = result.flashcards.map((card) => ({
+    const currentSet = liveSet ?? result.flashcardSet;
+    const currentCards = liveSet?.flashcards ?? result.flashcards;
+    const mappedCards = currentCards.map((card) => ({
       id: card._id,
       question: card.question,
       answer: card.answer,
@@ -121,11 +162,11 @@ export default function GenerateFromImagesPage() {
             <div className="flex justify-between items-start mb-4">
               <div>
                 <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {result.flashcardSet.title}
+                  {currentSet.title}
                 </h3>
-                {result.flashcardSet.description && (
+                {currentSet.description && (
                   <p className="text-gray-600 dark:text-gray-400 mt-1">
-                    {result.flashcardSet.description}
+                    {currentSet.description}
                   </p>
                 )}
               </div>
@@ -138,16 +179,18 @@ export default function GenerateFromImagesPage() {
             </div>
 
             <div className="text-sm text-gray-600 dark:text-gray-400">
-              {result.flashcards.length} flashcard{result.flashcards.length !== 1 ? 's' : ''} generated
+              {mappedCards.length} flashcard{mappedCards.length !== 1 ? 's' : ''}
             </div>
           </div>
 
           <FlashcardViewer
             flashcards={mappedCards}
             setId={setId}
-            flipMode={result.flashcardSet.flipMode}
+            flipMode={currentSet.flipMode}
             onUpdate={() => {}}
           />
+
+          <FlashcardChat setId={setId} />
 
           <div className="flex justify-center gap-3 flex-wrap">
             <button

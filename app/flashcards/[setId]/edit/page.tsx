@@ -8,6 +8,7 @@ import { api } from '@/convex/_generated/api';
 import { authClient } from '@/lib/auth-client';
 import AuthCard from '@/components/AuthCard';
 import FlashcardEditor from '@/components/FlashcardEditor';
+import FlashcardChat from '@/components/FlashcardChat';
 
 export default function FlashcardEditPage() {
   const params = useParams<{ setId: string }>();
@@ -90,6 +91,10 @@ export default function FlashcardEditPage() {
         setId={flashcardSet._id}
         onUpdate={() => {}}
       />
+
+      <div className="mt-6">
+        <FlashcardChat setId={flashcardSet._id} />
+      </div>
     </div>
   );
 }

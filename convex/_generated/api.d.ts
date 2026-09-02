@@ -9,6 +9,8 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as chat from "../chat.js";
+import type * as chatAgent from "../chatAgent.js";
 import type * as env from "../env.js";
 import type * as flashcards from "../flashcards.js";
 import type * as generation from "../generation.js";
@@ -27,6 +29,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  chat: typeof chat;
+  chatAgent: typeof chatAgent;
   env: typeof env;
   flashcards: typeof flashcards;
   generation: typeof generation;
