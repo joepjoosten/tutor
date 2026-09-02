@@ -232,8 +232,10 @@ export const generateFlashcards = action({
             content: messageContent,
           },
         ],
-        temperature: 0.7,
-        max_tokens: 4000,
+        // No `temperature`: reasoning models such as GPT-5.x reject it, and with
+        // `require_parameters` OpenRouter then finds no endpoint at all.
+        // Reasoning tokens count towards max_tokens, so leave headroom.
+        max_tokens: 8000,
         provider: {
           require_parameters: true,
         },
