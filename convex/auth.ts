@@ -12,6 +12,14 @@ const siteUrl =
   process.env.NEXT_PUBLIC_APP_URL ??
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
+const trustedOrigins = Array.from(
+  new Set(
+    [siteUrl, ...(process.env.TRUSTED_ORIGINS ?? "").split(",")]
+      .map((value) => value.trim())
+      .filter(Boolean)
+  )
+);
+
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
@@ -20,6 +28,7 @@ export const authComponent = createClient<DataModel>(components.betterAuth);
 export const createAuth = (ctx: GenericCtx<DataModel>) => {
   return betterAuth({
     baseURL: siteUrl,
+    trustedOrigins,
     secret: getBetterAuthSecret(),
     database: authComponent.adapter(ctx),
     emailAndPassword: {
