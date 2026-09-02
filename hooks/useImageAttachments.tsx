@@ -197,6 +197,8 @@ export function useImageAttachments() {
     clearError: () => setError(null),
     choosePhotos,
     takePhoto,
+    /** Queue files from anywhere, e.g. a clipboard paste or a drop. */
+    addFiles,
     remove,
     take,
     inputs,
