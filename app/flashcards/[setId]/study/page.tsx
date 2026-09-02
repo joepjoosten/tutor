@@ -86,6 +86,8 @@ export default function FlashcardStudyPage() {
         }))}
         setId={flashcardSet._id}
         flipMode={flashcardSet.flipMode}
+        speakQuestion={flashcardSet.speakFront}
+        speakAnswer={flashcardSet.speakBack}
         onUpdate={() => {}}
       />
     </div>

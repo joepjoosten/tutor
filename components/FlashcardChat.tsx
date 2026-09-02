@@ -28,13 +28,13 @@ const SUGGESTIONS = [
 ];
 
 const GENERATE_GREETING =
-  'Add photos of your homework or study material with the + button, tell me what you want, and I will make flashcards from them.';
+  'Add photos of your homework or study material with the + button, or just describe what you want to learn, and I will make flashcards.';
 
 export default function FlashcardChat({ setId, onGenerated, tall }: FlashcardChatProps) {
   const settings = useQuery(api.settings.getUserSettings);
   const messages = useQuery(api.chat.listMessages, setId ? { setId } : 'skip');
   const sendMessage = useAction(api.chat.sendMessage);
-  const generateFromImages = useAction(api.chat.generateFromImages);
+  const generateSet = useAction(api.chat.generateSet);
   const clearMessages = useMutation(api.chat.clearMessages);
   const attachments = useImageAttachments();
 
@@ -67,7 +67,7 @@ export default function FlashcardChat({ setId, onGenerated, tall }: FlashcardCha
     !busy &&
     !attachments.uploading &&
     attachments.queued === 0 &&
-    (generateMode ? attachments.images.length > 0 : draft.trim() !== '' || attachments.images.length > 0);
+    (draft.trim() !== '' || attachments.images.length > 0);
 
   const submit = async (text: string) => {
     if (!canSend) return;
@@ -79,7 +79,7 @@ export default function FlashcardChat({ setId, onGenerated, tall }: FlashcardCha
     setDraft('');
     try {
       if (generateMode) {
-        const result = await generateFromImages({
+        const result = await generateSet({
           imageIds: images.map((image) => image.id),
           message,
         });
@@ -136,7 +136,7 @@ export default function FlashcardChat({ setId, onGenerated, tall }: FlashcardCha
           </h3>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {generateMode
-              ? 'Add photos, then describe what you want. You can keep chatting afterwards.'
+              ? 'Add photos, describe a topic, or both. You can keep chatting afterwards.'
               : 'Ask questions, ask for changes, or add photos for more cards.'}
           </p>
         </div>
@@ -297,7 +297,7 @@ export default function FlashcardChat({ setId, onGenerated, tall }: FlashcardCha
           }}
           placeholder={
             generateMode
-              ? 'Optional: what should the cards focus on?'
+              ? 'For example: 20 cards on French irregular verbs, or add photos with +'
               : 'For example: the answer to card 3 is wrong, check the photo'
           }
           rows={2}

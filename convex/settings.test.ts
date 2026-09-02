@@ -116,6 +116,9 @@ describe("settings:setOpenRouterKey", () => {
       hasOpenRouterKey: true,
       openRouterKeyLast4: "9876",
       preferredModel: "openai/gpt-5.6-terra",
+      ttsModel: null,
+      ttsVoice: null,
+      animationsEnabled: true,
     });
   });
 
