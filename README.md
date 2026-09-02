@@ -91,10 +91,13 @@ Production-only if using Google in the UI:
 
 - set `NEXT_PUBLIC_DISABLE_GOOGLE_AUTH=false`
 
-Production Convex deployment variables if using Google auth:
+Production Convex deployment variables:
 
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
+- `SITE_URL` (the exact origin users visit, e.g. `https://tutor-theta-jade.vercel.app`)
+- `TRUSTED_ORIGINS` (optional, comma-separated extra origins such as other Vercel aliases)
+- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` if using Google auth
+
+Better Auth rejects sign-in with `Invalid callbackURL` when the origin in the browser is not `SITE_URL` or listed in `TRUSTED_ORIGINS`.
 
 Set those on the production Convex deployment, for example:
 
