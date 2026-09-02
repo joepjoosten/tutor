@@ -9,7 +9,7 @@ import type { Id } from '@/convex/_generated/dataModel';
 import { authClient } from '@/lib/auth-client';
 import AuthCard from '@/components/AuthCard';
 import FlashcardChat from '@/components/FlashcardChat';
-import FlashcardViewer from '@/components/FlashcardViewer';
+import FlashcardEditor from '@/components/FlashcardEditor';
 
 export default function GenerateFromImagesPage() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
@@ -110,7 +110,7 @@ export default function GenerateFromImagesPage() {
               </div>
             </div>
 
-            <FlashcardViewer
+            <FlashcardEditor
               flashcards={flashcardSet.flashcards.map((card) => ({
                 id: card._id,
                 question: card.question,
@@ -118,22 +118,13 @@ export default function GenerateFromImagesPage() {
                 order_index: card.orderIndex,
               }))}
               setId={flashcardSet._id}
-              flipMode={flashcardSet.flipMode}
-              speakQuestion={flashcardSet.speakFront}
-              speakAnswer={flashcardSet.speakBack}
               onUpdate={() => {}}
             />
 
             <div className="flex justify-center gap-3 flex-wrap">
               <button
-                onClick={() => router.push(`/flashcards/${setId}/edit`)}
-                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg shadow-md transition-colors"
-              >
-                Edit cards
-              </button>
-              <button
                 onClick={() => router.push(`/flashcards/${setId}/study`)}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md transition-colors"
+                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg shadow-md transition-colors"
               >
                 Study this set
               </button>
