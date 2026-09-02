@@ -3,11 +3,14 @@
 import { FormEvent, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import ModelSelector from "@/components/ModelSelector";
 
 export default function SettingsPanel() {
   const settings = useQuery(api.settings.getUserSettings);
   const setOpenRouterKey = useMutation(api.settings.setOpenRouterKey);
   const clearOpenRouterKey = useMutation(api.settings.clearOpenRouterKey);
+  const setPreferredModel = useMutation(api.settings.setPreferredModel);
+  const [modelMessage, setModelMessage] = useState<string | null>(null);
 
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
@@ -51,6 +54,19 @@ export default function SettingsPanel() {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleModelChange = async (model: string) => {
+    if (settings === undefined || model === settings.preferredModel) return;
+    setModelMessage(null);
+    try {
+      await setPreferredModel({ model });
+      setModelMessage("Model saved.");
+    } catch (caughtError) {
+      setModelMessage(
+        caughtError instanceof Error ? caughtError.message : "Failed to save model."
+      );
     }
   };
 
@@ -126,6 +142,26 @@ export default function SettingsPanel() {
           </button>
         </div>
       </form>
+
+      <div className="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+          AI model
+        </h3>
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+          Used for generating flashcards and for the chat. Only models that can
+          read photos are listed.
+        </p>
+        {settings !== undefined && (
+          <ModelSelector
+            value={settings.preferredModel ?? ""}
+            onChange={(model) => void handleModelChange(model)}
+            disabled={saving}
+          />
+        )}
+        {modelMessage && (
+          <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{modelMessage}</p>
+        )}
+      </div>
     </div>
   );
 }

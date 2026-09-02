@@ -85,6 +85,7 @@ export default defineSchema({
     setId: v.id("flashcardSets"),
     role: v.union(v.literal("user"), v.literal("assistant")),
     content: v.string(),
+    imageIds: v.optional(v.array(v.id("images"))),
     toolActions: v.optional(
       v.array(
         v.object({
@@ -102,6 +103,7 @@ export default defineSchema({
     userId: v.string(),
     openRouterKeyCiphertext: v.optional(v.string()),
     openRouterKeyLast4: v.optional(v.string()),
+    preferredModel: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_userId", ["userId"]),

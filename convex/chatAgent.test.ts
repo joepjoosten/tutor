@@ -72,7 +72,13 @@ describe("buildSystemPrompt", () => {
     const prompt = buildSystemPrompt({ title: "Bio", flashcards: cards }, true);
     expect(prompt).toContain("#1\nQ: What is a cell?");
     expect(prompt).toContain("#2\nQ: What does the nucleus do?");
-    expect(prompt).toContain("photos of the study material are attached");
+    expect(prompt).toContain("Photos of the study material are attached");
+  });
+
+  it("tells the model when the student attached new photos", () => {
+    const prompt = buildSystemPrompt({ title: "Bio", flashcards: cards }, true, 1);
+    expect(prompt).toContain("The last photo is new");
+    expect(prompt).toContain("add_flashcard");
   });
 });
 
@@ -81,7 +87,7 @@ describe("buildPrompt", () => {
     const messages = buildPrompt({
       set: { title: "Bio", flashcards: cards },
       history: [
-        { id: "m1", role: "user", content: "hi" },
+        { id: "m1", role: "user", content: "hi", imageCount: 2 },
         { id: "k1:2-3", role: "assistant", content: "hello" },
       ],
       images: [{ mediaType: "image/jpeg", fileName: "p.jpg", data: new Uint8Array([1]) }],
@@ -89,7 +95,7 @@ describe("buildPrompt", () => {
     });
 
     expect(messages[0]).toMatchObject({ role: "system" });
-    expect(messages[1]).toEqual({ role: "user", content: "hi" });
+    expect(messages[1]).toEqual({ role: "user", content: "hi\n[attached 2 photos]" });
     expect(messages[2]).toMatchObject({
       role: "assistant",
       content: [{ type: "text", text: "hello", options: { openai: { itemId: "msg_k123" } } }],
