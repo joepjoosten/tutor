@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import NextImage from 'next/image';
 import { useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import ImageCropper from './ImageCropper';
+import WebcamCapture from './WebcamCapture';
 
 interface UploadedImage {
   id: Id<'images'>;
@@ -98,17 +99,23 @@ export default function ImageUpload({ onImagesChange }: ImageUploadProps) {
   const [error, setError] = useState<string | null>(null);
   const [cropImage, setCropImage] = useState<PendingImage | null>(null);
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  const [webcamOpen, setWebcamOpen] = useState(false);
+  const [webcamSupported, setWebcamSupported] = useState(false);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  useEffect(() => {
+    setWebcamSupported(
+      typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia)
+    );
+  }, []);
+
+  const enqueueFiles = async (files: File[]) => {
+    if (files.length === 0) return;
 
     setError(null);
 
     // Convert files to pending images for cropping
     const newPending: PendingImage[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    for (const file of files) {
       const preview = await new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
@@ -125,9 +132,21 @@ export default function ImageUpload({ onImagesChange }: ImageUploadProps) {
     if (!cropImage && allPending.length > 0) {
       setCropImage(allPending[0]);
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    await enqueueFiles(Array.from(files));
 
     // Reset input
     e.target.value = '';
+  };
+
+  const handleWebcamCapture = async (file: File) => {
+    setWebcamOpen(false);
+    await enqueueFiles([file]);
   };
 
   const handleCropComplete = async (croppedBlob: Blob, croppedDataUrl: string) => {
@@ -267,6 +286,37 @@ export default function ImageUpload({ onImagesChange }: ImageUploadProps) {
             You&apos;ll be able to crop each image before uploading
           </p>
         </label>
+
+        {webcamSupported && (
+          <button
+            type="button"
+            onClick={() => setWebcamOpen(true)}
+            disabled={uploading}
+            className="mt-4 hidden items-center gap-2 rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 md:inline-flex"
+          >
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+            Take photo with webcam
+          </button>
+        )}
       </div>
 
       {error && (
@@ -325,6 +375,13 @@ export default function ImageUpload({ onImagesChange }: ImageUploadProps) {
             ))}
           </div>
         </div>
+      )}
+
+      {webcamOpen && (
+        <WebcamCapture
+          onCapture={(file) => void handleWebcamCapture(file)}
+          onCancel={() => setWebcamOpen(false)}
+        />
       )}
 
       {cropImage && (
