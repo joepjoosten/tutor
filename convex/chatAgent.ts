@@ -54,6 +54,10 @@ export interface FlashcardChatStore {
   readonly updateSet: (patch: {
     title?: string;
     description?: string | null;
+    frontLanguage?: string | null;
+    backLanguage?: string | null;
+    speakFront?: boolean;
+    speakBack?: boolean;
   }) => Promise<void>;
 }
 
@@ -103,6 +107,7 @@ export function buildSystemPrompt(set: ChatSet, hasImages: boolean, newImageCoun
     "- Refer to flashcards by their number (#1, #2, ...). Numbers refer to the current list above; after you delete a card the remaining cards renumber, and the tool result tells you the new state.",
     "- When the student asks to fix, improve, add, merge, split, or remove cards, do it with tools, then summarise briefly what changed.",
     "- When the student asks a question about the material, answer it directly and offer to add a card if that would help.",
+    "- Card style: for vocabulary, phrases, and translations put only the word or sentence on the front and only the translation on the back, never a wrapper question such as \"How do you say ... in French:\". The same goes for terms and definitions: the term on the front, the definition on the back. Phrase the front as a question only when the material really is a question, such as a maths problem. When the student asks you to fix this, rewrite every affected card.",
     "- Reply in the student's language. Keep replies short; use plain text, no markdown tables.",
     hasImages
       ? "- Photos of the study material are attached to the student's message: the pages the set was made from, followed by any photos added later in the conversation. Check them when judging whether a question or answer is correct or complete."
@@ -203,10 +208,15 @@ export const flashcardToolkit = Toolkit.make(
     success: Schema.String,
   }),
   Tool.make("update_set", {
-    description: "Changes the title and/or description of the flashcard set.",
+    description:
+      "Changes the title, description, or pronunciation settings of the flashcard set. Languages are BCP-47 codes such as fr or pt-BR; speakFront/speakBack turn the read-aloud button on or off for the question/answer side.",
     parameters: Schema.Struct({
       title: Schema.optional(Schema.String),
       description: Schema.optional(Schema.String),
+      frontLanguage: Schema.optional(Schema.String),
+      backLanguage: Schema.optional(Schema.String),
+      speakFront: Schema.optional(Schema.Boolean),
+      speakBack: Schema.optional(Schema.Boolean),
     }),
     success: Schema.String,
   })
@@ -283,15 +293,20 @@ export function makeHandlers(store: FlashcardChatStore, actions: Array<ToolActio
         });
         return `Deleted flashcard #${cardNumber}. ${await currentList()}`;
       }),
-    update_set: ({ title, description }) =>
+    update_set: ({ title, description, frontLanguage, backLanguage, speakFront, speakBack }) =>
       attempt(async () => {
-        if (title === undefined && description === undefined) {
-          return "Error: provide a new title and/or description.";
+        const patch = { title, description, frontLanguage, backLanguage, speakFront, speakBack };
+        if (Object.values(patch).every((value) => value === undefined)) {
+          return "Error: provide at least one field to change.";
         }
-        await store.updateSet({ title, description });
+        await store.updateSet(patch);
         const parts = [
           title !== undefined ? `title to "${truncate(title)}"` : null,
           description !== undefined ? "description" : null,
+          frontLanguage !== undefined ? `front language to ${frontLanguage}` : null,
+          backLanguage !== undefined ? `back language to ${backLanguage}` : null,
+          speakFront !== undefined ? `read-aloud on the front ${speakFront ? "on" : "off"}` : null,
+          speakBack !== undefined ? `read-aloud on the back ${speakBack ? "on" : "off"}` : null,
         ].filter((part): part is string => part !== null);
         actions.push({ tool: "update_set", summary: `Changed set ${parts.join(" and ")}` });
         return "Updated the set.";

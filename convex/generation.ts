@@ -7,6 +7,8 @@ import type { Id } from "./_generated/dataModel";
 interface FlashcardResponse {
   title: string;
   description?: string;
+  languages?: { front?: string | null; back?: string | null };
+  pronunciation?: { front?: boolean; back?: boolean };
   flashcards: Array<{
     question: string;
     answer: string;
@@ -58,6 +60,10 @@ const createGeneratedFlashcardsRef = makeFunctionReference<
     customInstructions?: string;
     title: string;
     description?: string;
+    frontLanguage?: string;
+    backLanguage?: string;
+    speakFront?: boolean;
+    speakBack?: boolean;
     flashcards: Array<{ question: string; answer: string }>;
   },
   {
@@ -79,13 +85,17 @@ const createGeneratedFlashcardsRef = makeFunctionReference<
 
 function buildPrompt(imageCount: number, customInstructions?: string) {
   let prompt =
-    imageCount > 1
-      ? `You will see ${imageCount} images below. These are all pages from the same homework or study material. Please look at ALL ${imageCount} images carefully before creating flashcards.
+    imageCount === 0
+      ? `Create flashcards to help a student learn the topic described in the request below. Use your own knowledge of the subject; there are no images.
+
+Request: ${customInstructions ?? ""}`
+      : imageCount > 1
+        ? `You will see ${imageCount} images below. These are all pages from the same homework or study material. Please look at ALL ${imageCount} images carefully before creating flashcards.
 
 Create flashcards to help a student learn the content from ALL the images.`
-      : "Analyze this homework/study material image and create flashcards to help a student learn the content.";
+        : "Analyze this homework/study material image and create flashcards to help a student learn the content.";
 
-  if (customInstructions) {
+  if (customInstructions && imageCount > 0) {
     prompt += `\n\nSpecial Instructions: ${customInstructions}`;
   }
 
@@ -95,6 +105,8 @@ Please respond with a JSON object in this exact format:
 {
   "title": "Brief title for this flashcard set",
   "description": "Optional description of what this covers",
+  "languages": { "front": "BCP-47 code of the language the questions are written in, e.g. nl", "back": "BCP-47 code of the language the answers are written in, e.g. fr" },
+  "pronunciation": { "front": false, "back": true },
   "flashcards": [
     {
       "question": "Clear, specific question",
@@ -107,14 +119,23 @@ Guidelines:
 - Create as many flashcards as needed to cover all the important content
 - Questions should be clear and test understanding
 - Answers should be complete but concise
+- For vocabulary, phrases, and translations (language learning): put ONLY the word or sentence in one language on the front and ONLY its translation on the back. Never wrap it in a question such as "How do you say ... in French:" or "Wat betekent ...". The front "le chien", back "de hond" is correct; the front "Hoe zeg je 'de hond' in het Frans?" is wrong
+- Likewise for terms and definitions, dates, formulas, and lists: the front is the term or cue itself, the back is the definition or fact. Only phrase the front as a full question when the material is really a question, such as a maths problem or a comprehension question
+- Keep the front short; put explanations on the back
 - Cover key concepts, definitions, formulas, and important facts
 - If there are math problems, include step-by-step solutions in answers
 - Make questions progressively more challenging when appropriate
-- Focus on what a student would need to know for homework/tests${imageCount > 1 ? "\n- Make sure to create flashcards from content in ALL images, not just the first one" : ""}${customInstructions ? "\n- Follow the special instructions provided above" : ""}
+- "pronunciation" marks the sides that are in a language the student is learning (vocabulary, phrases, sentences), so the app can read them aloud. Set both to false for material that is not about learning a language
+- Focus on what a student would need to know for homework/tests${imageCount > 1 ? "\n- Make sure to create flashcards from content in ALL images, not just the first one" : ""}${imageCount === 0 ? "\n- Follow the request above closely: its topic, level, language, and any number of cards it asks for" : customInstructions ? "\n- Follow the special instructions provided above" : ""}
 
 Return ONLY the JSON object, no other text.`;
 
   return prompt;
+}
+
+function cleanLanguage(value: string | null | undefined) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return /^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$/.test(trimmed) ? trimmed : undefined;
 }
 
 function parseFlashcardResponse(response: string): FlashcardResponse {
@@ -187,8 +208,8 @@ export const generateFlashcards = action({
       imageIds: args.imageIds,
     });
 
-    if (images.length === 0) {
-      throw new Error("Upload at least one image before generating flashcards.");
+    if (images.length === 0 && !args.customInstructions?.trim()) {
+      throw new Error("Add a photo or describe what the flashcards should be about.");
     }
 
     if (images.length !== args.imageIds.length) {
@@ -265,6 +286,10 @@ export const generateFlashcards = action({
       customInstructions: args.customInstructions,
       title: flashcardData.title,
       description: flashcardData.description,
+      frontLanguage: cleanLanguage(flashcardData.languages?.front),
+      backLanguage: cleanLanguage(flashcardData.languages?.back),
+      speakFront: flashcardData.pronunciation?.front === true,
+      speakBack: flashcardData.pronunciation?.back === true,
       flashcards: flashcardData.flashcards,
     });
   },

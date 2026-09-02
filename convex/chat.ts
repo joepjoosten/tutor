@@ -259,7 +259,15 @@ const deleteFlashcardRef = makeFunctionReference<
 
 const updateFlashcardSetRef = makeFunctionReference<
   "mutation",
-  { setId: Id<"flashcardSets">; title?: string; description?: string | null },
+  {
+    setId: Id<"flashcardSets">;
+    title?: string;
+    description?: string | null;
+    frontLanguage?: string | null;
+    backLanguage?: string | null;
+    speakFront?: boolean;
+    speakBack?: boolean;
+  },
   unknown
 >("flashcards:updateFlashcardSet");
 
@@ -275,20 +283,21 @@ const generateFlashcardsRef = makeFunctionReference<
 const DEFAULT_GENERATE_MESSAGE = "Make flashcards from these photos.";
 
 /**
- * First turn of a chat: creates a set from the attached photos, then records
- * the exchange so the conversation can continue on that set.
+ * First turn of a chat: creates a set from the attached photos and/or the
+ * student's description, then records the exchange so the conversation can
+ * continue on that set.
  */
-export const generateFromImages = action({
+export const generateSet = action({
   args: {
     imageIds: v.array(v.id("images")),
     message: v.string(),
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
-    if (args.imageIds.length === 0) {
-      throw new Error("Add at least one photo first.");
-    }
     const message = args.message.trim();
+    if (args.imageIds.length === 0 && message === "") {
+      throw new Error("Add a photo or describe what the flashcards should be about.");
+    }
     const model = (await ctx.runQuery(getPreferredModelRef, { userId })) ?? DEFAULT_CHAT_MODEL;
 
     const result = await ctx.runAction(generateFlashcardsRef, {
@@ -303,7 +312,9 @@ export const generateFromImages = action({
     const count = result.flashcards.length;
     const reply = `I made the set "${result.flashcardSet.title}" with ${count} flashcard${
       count === 1 ? "" : "s"
-    }. Have a look below. Tell me what to change, or add more photos to make more cards.`;
+    }. Have a look below. Tell me what to change, or ${
+      args.imageIds.length > 0 ? "add more photos" : "describe more topics"
+    } to make more cards.`;
 
     await ctx.runMutation(appendTurnRef, {
       userId,

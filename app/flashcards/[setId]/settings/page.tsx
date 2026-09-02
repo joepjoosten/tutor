@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery } from 'convex/react';
@@ -32,6 +32,21 @@ export default function FlashcardSetSettingsPage() {
   const [editedTitle, setEditedTitle] = useState('');
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedDescription, setEditedDescription] = useState('');
+
+  const [frontLanguage, setFrontLanguage] = useState('');
+  const [backLanguage, setBackLanguage] = useState('');
+  const [speakFront, setSpeakFront] = useState(false);
+  const [speakBack, setSpeakBack] = useState(false);
+  const [savingPronunciation, setSavingPronunciation] = useState(false);
+  const [pronunciationMessage, setPronunciationMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!flashcardSet) return;
+    setFrontLanguage(flashcardSet.frontLanguage ?? '');
+    setBackLanguage(flashcardSet.backLanguage ?? '');
+    setSpeakFront(flashcardSet.speakFront ?? false);
+    setSpeakBack(flashcardSet.speakBack ?? false);
+  }, [flashcardSet]);
 
   const loading =
     sessionPending || (session ? flashcardSet === undefined : false);
@@ -79,6 +94,27 @@ export default function FlashcardSetSettingsPage() {
     } catch (error) {
       console.error('Failed to update set description:', error);
       alert('Failed to update set description');
+    }
+  };
+
+  const savePronunciation = async () => {
+    setSavingPronunciation(true);
+    setPronunciationMessage(null);
+    try {
+      await updateSet({
+        setId,
+        frontLanguage: frontLanguage.trim() || null,
+        backLanguage: backLanguage.trim() || null,
+        speakFront,
+        speakBack,
+      });
+      setPronunciationMessage('Pronunciation settings saved.');
+    } catch (caughtError) {
+      setPronunciationMessage(
+        caughtError instanceof Error ? caughtError.message : 'Failed to save pronunciation settings.'
+      );
+    } finally {
+      setSavingPronunciation(false);
     }
   };
 
@@ -259,6 +295,42 @@ export default function FlashcardSetSettingsPage() {
         </div>
 
         <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <h4 className="text-base font-semibold text-gray-900 dark:text-white">Pronunciation</h4>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Show a speaker button that reads a side of the card aloud. Audio is generated once per
+            card with your OpenRouter key and then kept.
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <PronunciationSide
+              label="Front (questions)"
+              language={frontLanguage}
+              speak={speakFront}
+              onLanguageChange={setFrontLanguage}
+              onSpeakChange={setSpeakFront}
+            />
+            <PronunciationSide
+              label="Back (answers)"
+              language={backLanguage}
+              speak={speakBack}
+              onLanguageChange={setBackLanguage}
+              onSpeakChange={setSpeakBack}
+            />
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              onClick={() => void savePronunciation()}
+              disabled={savingPronunciation}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm disabled:opacity-50"
+            >
+              {savingPronunciation ? 'Saving...' : 'Save pronunciation'}
+            </button>
+            {pronunciationMessage && (
+              <span className="text-sm text-gray-600 dark:text-gray-300">{pronunciationMessage}</span>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
           <button
             onClick={() => void handleDeleteSet()}
             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
@@ -267,6 +339,47 @@ export default function FlashcardSetSettingsPage() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+interface PronunciationSideProps {
+  label: string;
+  language: string;
+  speak: boolean;
+  onLanguageChange: (value: string) => void;
+  onSpeakChange: (value: boolean) => void;
+}
+
+function PronunciationSide({
+  label,
+  language,
+  speak,
+  onLanguageChange,
+  onSpeakChange,
+}: PronunciationSideProps) {
+  return (
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+      <div className="text-sm font-medium text-gray-900 dark:text-white">{label}</div>
+      <label className="mt-2 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+        <input
+          type="checkbox"
+          checked={speak}
+          onChange={(event) => onSpeakChange(event.target.checked)}
+          className="h-4 w-4"
+        />
+        Read aloud
+      </label>
+      <label className="mt-2 block text-xs text-gray-500 dark:text-gray-400">
+        Language code
+        <input
+          type="text"
+          value={language}
+          onChange={(event) => onLanguageChange(event.target.value)}
+          placeholder="e.g. fr, de, pt-BR"
+          className="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white"
+        />
+      </label>
     </div>
   );
 }

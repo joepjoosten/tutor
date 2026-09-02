@@ -119,6 +119,8 @@ export default function GenerateFromImagesPage() {
               }))}
               setId={flashcardSet._id}
               flipMode={flashcardSet.flipMode}
+              speakQuestion={flashcardSet.speakFront}
+              speakAnswer={flashcardSet.speakBack}
               onUpdate={() => {}}
             />
 

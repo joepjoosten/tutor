@@ -277,7 +277,64 @@ describe("generation:generateFlashcards", () => {
       customInstructions: "Focus on definitions.",
       title: "Biology",
       description: "Chapter 1",
+      frontLanguage: undefined,
+      backLanguage: undefined,
+      speakFront: false,
+      speakBack: false,
       flashcards: [{ question: "Q1", answer: "A1" }],
     });
+  });
+
+  it("generates from a text request when no images are attached", async () => {
+    const mutationResult = {
+      flashcardSet: { _id: "set-2", title: "French verbs", flipMode: false, createdAt: 1 },
+      flashcards: [{ _id: "card-1", question: "aller", answer: "to go", orderIndex: 0 }],
+    };
+    const { ctx, runMutation, get } = createActionCtx({ images: [], mutationResult });
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: `{"title": "French verbs", "flashcards": [{"question": "aller", "answer": "to go"}]}`,
+            },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await handlerOf(generateFlashcards)(ctx as never, {
+      imageIds: [] as never,
+      model: "openai/gpt-4o-mini",
+      customInstructions: "20 cards on French irregular verbs",
+    });
+
+    expect(result).toBe(mutationResult);
+    expect(get).not.toHaveBeenCalled();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string) as {
+      messages: Array<{ content: Array<{ type: string; text?: string }> }>;
+    };
+    expect(body.messages[0].content).toHaveLength(1);
+    expect(body.messages[0].content[0].text).toContain("there are no images");
+    expect(body.messages[0].content[0].text).toContain("Request: 20 cards on French irregular verbs");
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ imageIds: [], title: "French verbs" })
+    );
+  });
+
+  it("rejects a request with neither images nor a description", async () => {
+    const { ctx } = createActionCtx({ images: [] });
+
+    await expect(
+      handlerOf(generateFlashcards)(ctx as never, {
+        imageIds: [] as never,
+        model: "openai/gpt-4o-mini",
+        customInstructions: "   ",
+      })
+    ).rejects.toThrow("Add a photo or describe what the flashcards should be about.");
   });
 });

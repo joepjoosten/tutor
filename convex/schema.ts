@@ -30,6 +30,11 @@ export default defineSchema({
     description: v.optional(v.string()),
     llmInteractionId: v.optional(v.id("llmInteractions")),
     flipMode: v.boolean(),
+    // Pronunciation: BCP-47 language per side and whether to offer audio.
+    frontLanguage: v.optional(v.string()),
+    backLanguage: v.optional(v.string()),
+    speakFront: v.optional(v.boolean()),
+    speakBack: v.optional(v.boolean()),
     createdAt: v.number(),
   })
     .index("by_userId", ["userId"])
@@ -46,6 +51,19 @@ export default defineSchema({
   })
     .index("by_setId_orderIndex", ["setId", "orderIndex"])
     .index("by_userId_setId", ["userId", "setId"]),
+
+  cardAudio: defineTable({
+    userId: v.string(),
+    flashcardId: v.id("flashcards"),
+    side: v.union(v.literal("question"), v.literal("answer")),
+    textHash: v.string(),
+    storageId: v.id("_storage"),
+    model: v.string(),
+    voice: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_flashcardId_side", ["flashcardId", "side"])
+    .index("by_flashcardId", ["flashcardId"]),
 
   sharedFlashcardSets: defineTable({
     ownerUserId: v.string(),
@@ -104,6 +122,9 @@ export default defineSchema({
     openRouterKeyCiphertext: v.optional(v.string()),
     openRouterKeyLast4: v.optional(v.string()),
     preferredModel: v.optional(v.string()),
+    ttsModel: v.optional(v.string()),
+    ttsVoice: v.optional(v.string()),
+    animationsEnabled: v.optional(v.boolean()),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_userId", ["userId"]),

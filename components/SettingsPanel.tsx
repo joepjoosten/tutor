@@ -4,12 +4,14 @@ import { FormEvent, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import ModelSelector from "@/components/ModelSelector";
+import TtsSelector from "@/components/TtsSelector";
 
 export default function SettingsPanel() {
   const settings = useQuery(api.settings.getUserSettings);
   const setOpenRouterKey = useMutation(api.settings.setOpenRouterKey);
   const clearOpenRouterKey = useMutation(api.settings.clearOpenRouterKey);
   const setPreferredModel = useMutation(api.settings.setPreferredModel);
+  const setAnimationsEnabled = useMutation(api.settings.setAnimationsEnabled);
   const [modelMessage, setModelMessage] = useState<string | null>(null);
 
   const [apiKey, setApiKey] = useState("");
@@ -160,6 +162,43 @@ export default function SettingsPanel() {
         )}
         {modelMessage && (
           <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{modelMessage}</p>
+        )}
+      </div>
+
+      <div className="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+          Study animations
+        </h3>
+        <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
+          Flip cards in 3D and slide in the next card. Turn off for instant changes.
+        </p>
+        <label className="flex items-center gap-3 text-sm text-gray-800 dark:text-gray-200">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={settings?.animationsEnabled ?? true}
+            disabled={settings === undefined}
+            onChange={(event) => void setAnimationsEnabled({ enabled: event.target.checked })}
+          />
+          Animate flashcards
+        </label>
+      </div>
+
+      <div className="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+          Pronunciation voice
+        </h3>
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+          Speech model and voice used to read flashcards aloud. Pick a model that
+          speaks the languages you study. Prices are per million tokens, as on
+          OpenRouter.
+        </p>
+        {settings !== undefined && (
+          <TtsSelector
+            model={settings.ttsModel}
+            voice={settings.ttsVoice}
+            disabled={saving}
+          />
         )}
       </div>
     </div>

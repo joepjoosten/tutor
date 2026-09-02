@@ -21,6 +21,29 @@ async function requireOwnedSet(
   return set;
 }
 
+/** Trims a BCP-47 tag such as "fr" or "pt-BR"; empty becomes unset. */
+export function normalizeLanguage(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  if (!/^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$/.test(trimmed)) {
+    throw new Error(`"${trimmed}" is not a language code such as "fr" or "pt-BR".`);
+  }
+  return trimmed;
+}
+
+async function deleteCardAudio(ctx: MutationCtx, flashcardId: Id<"flashcards">) {
+  const entries = await ctx.db
+    .query("cardAudio")
+    .withIndex("by_flashcardId", (q) => q.eq("flashcardId", flashcardId))
+    .collect();
+  await Promise.all(
+    entries.map(async (entry) => {
+      await ctx.storage.delete(entry.storageId);
+      await ctx.db.delete(entry._id);
+    })
+  );
+}
+
 async function requireOwnedCard(
   ctx: MutationCtx,
   userId: string,
@@ -113,6 +136,10 @@ export const updateFlashcardSet = mutation({
     title: v.optional(v.string()),
     description: v.optional(v.union(v.string(), v.null())),
     flipMode: v.optional(v.boolean()),
+    frontLanguage: v.optional(v.union(v.string(), v.null())),
+    backLanguage: v.optional(v.union(v.string(), v.null())),
+    speakFront: v.optional(v.boolean()),
+    speakBack: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
@@ -122,6 +149,14 @@ export const updateFlashcardSet = mutation({
     if (args.title !== undefined) patch.title = args.title;
     if (args.description !== undefined) patch.description = args.description ?? undefined;
     if (args.flipMode !== undefined) patch.flipMode = args.flipMode;
+    if (args.frontLanguage !== undefined) {
+      patch.frontLanguage = normalizeLanguage(args.frontLanguage);
+    }
+    if (args.backLanguage !== undefined) {
+      patch.backLanguage = normalizeLanguage(args.backLanguage);
+    }
+    if (args.speakFront !== undefined) patch.speakFront = args.speakFront;
+    if (args.speakBack !== undefined) patch.speakBack = args.speakBack;
 
     await ctx.db.patch(args.setId, patch);
     return ctx.db.get(args.setId);
@@ -181,6 +216,7 @@ export const deleteFlashcardSet = mutation({
       )
     );
 
+    await Promise.all(flashcards.map((card) => deleteCardAudio(ctx, card._id)));
     await Promise.all(flashcards.map((card) => ctx.db.delete(card._id)));
     await Promise.all(progress.map((item) => ctx.db.delete(item._id)));
     await Promise.all(sharedCards.flat().map((card) => ctx.db.delete(card._id)));
@@ -243,6 +279,7 @@ export const deleteFlashcard = mutation({
     await ctx.db.patch(args.flashcardId, {
       deletedAt: Date.now(),
     });
+    await deleteCardAudio(ctx, args.flashcardId);
 
     const progress = await ctx.db
       .query("studyProgress")
@@ -337,6 +374,10 @@ export const createGeneratedFlashcards = internalMutation({
     customInstructions: v.optional(v.string()),
     title: v.string(),
     description: v.optional(v.string()),
+    frontLanguage: v.optional(v.string()),
+    backLanguage: v.optional(v.string()),
+    speakFront: v.optional(v.boolean()),
+    speakBack: v.optional(v.boolean()),
     flashcards: v.array(
       v.object({
         question: v.string(),
@@ -363,6 +404,10 @@ export const createGeneratedFlashcards = internalMutation({
       description: args.description,
       llmInteractionId: interactionId,
       flipMode: false,
+      frontLanguage: args.frontLanguage,
+      backLanguage: args.backLanguage,
+      speakFront: args.speakFront,
+      speakBack: args.speakBack,
       createdAt,
     });
 

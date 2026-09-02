@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery } from 'convex/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAction, useMutation, useQuery } from 'convex/react';
 import type { Id } from '@/convex/_generated/dataModel';
 import { api } from '@/convex/_generated/api';
 import {
@@ -23,6 +23,8 @@ interface SharedStudyProgress {
 interface BaseFlashcardStudyProps {
   flashcards: FlashcardStudyCard[];
   flipMode: boolean;
+  /** Flip and slide animations; defaults to on. */
+  animations?: boolean;
   emptyStateDescription?: string;
   onUpdate?: () => void;
 }
@@ -30,6 +32,10 @@ interface BaseFlashcardStudyProps {
 interface OwnerFlashcardStudyProps extends BaseFlashcardStudyProps {
   mode: 'owner';
   setId: Id<'flashcardSets'>;
+  /** Offer read-aloud audio for the question side. */
+  speakQuestion?: boolean;
+  /** Offer read-aloud audio for the answer side. */
+  speakAnswer?: boolean;
 }
 
 interface SharedFlashcardStudyProps extends BaseFlashcardStudyProps {
@@ -60,7 +66,10 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
     flipMode,
     emptyStateDescription,
   } = props;
+  const animations = props.animations ?? true;
   const ownerSetId = props.mode === 'owner' ? props.setId : undefined;
+  const speakQuestion = props.mode === 'owner' && props.speakQuestion === true;
+  const speakAnswer = props.mode === 'owner' && props.speakAnswer === true;
   const progressStorageKey =
     props.mode === 'shared' ? props.progressStorageKey : undefined;
 
@@ -78,6 +87,14 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   const [dontKnowCards, setDontKnowCards] = useState<SharedStudyProgress>({});
   const [randomize, setRandomize] = useState(false);
   const [localFlipMode, setLocalFlipMode] = useState(flipMode);
+  // Which way the next card slides in; set by the navigation handlers.
+  const slideDirectionRef = useRef<'next' | 'prev'>('next');
+  // The card that is sliding out while the new one slides in.
+  const [outgoing, setOutgoing] = useState<{
+    card: FlashcardStudyCard;
+    flipped: boolean;
+    direction: 'next' | 'prev';
+  } | null>(null);
   const [showDontKnowOnly, setShowDontKnowOnly] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
@@ -248,12 +265,22 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
     );
   }
 
+  /** Remembers the current card so it can slide out while the next slides in. */
+  const beginSlide = (direction: 'next' | 'prev') => {
+    slideDirectionRef.current = direction;
+    if (animations && currentCard) {
+      setOutgoing({ card: currentCard, flipped: showAnswer, direction });
+    }
+  };
+
   const nextCard = () => {
+    beginSlide('next');
     setShowAnswer(false);
     setCurrentIndex((prev) => (prev + 1) % visibleCards.length);
   };
 
   const prevCard = () => {
+    beginSlide('prev');
     setShowAnswer(false);
     setCurrentIndex((prev) => (prev - 1 + visibleCards.length) % visibleCards.length);
   };
@@ -378,13 +405,64 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
     }
   };
 
-  const getDisplayQuestion = () => localFlipMode ? currentCard.answer : currentCard.question;
-  const getDisplayAnswer = () => localFlipMode ? currentCard.question : currentCard.answer;
   const dontKnowCount = Object.values(dontKnowCards).filter((value) => value).length;
+
+  const faces = {
+    front: {
+      label: localFlipMode ? 'ANSWER' : 'QUESTION',
+      side: (localFlipMode ? 'answer' : 'question') as 'question' | 'answer',
+    },
+    back: {
+      label: localFlipMode ? 'QUESTION' : 'ANSWER',
+      side: (localFlipMode ? 'question' : 'answer') as 'question' | 'answer',
+    },
+  };
+
+  const faceTexts = (card: FlashcardStudyCard) => ({
+    front: localFlipMode ? card.answer : card.question,
+    back: localFlipMode ? card.question : card.answer,
+  });
+
+  /** The current card plus, while sliding, the previous card on its way out. */
+  const renderCards = (size: 'sm' | 'lg') => (
+    <>
+      {outgoing && outgoing.card.id !== currentCard.id && (
+        <FlipCard
+          key={`out-${outgoing.card.id}`}
+          flipped={outgoing.flipped}
+          onToggle={() => {}}
+          size={size}
+          enterClass={`card-exit-${outgoing.direction} pointer-events-none`}
+          animate={false}
+          needsReview={Boolean(dontKnowCards[outgoing.card.id])}
+          front={{ ...faces.front, text: faceTexts(outgoing.card).front }}
+          back={{ ...faces.back, text: faceTexts(outgoing.card).back }}
+          flashcardId={outgoing.card.id as Id<'flashcards'>}
+          speakQuestion={false}
+          speakAnswer={false}
+          onAnimationEnd={() => setOutgoing(null)}
+        />
+      )}
+      <FlipCard
+        key={currentCard.id}
+        flipped={showAnswer}
+        onToggle={toggleAnswer}
+        size={size}
+        enterClass={animations ? `card-enter-${slideDirectionRef.current}` : ''}
+        animate={animations}
+        needsReview={Boolean(dontKnowCards[currentCard.id])}
+        front={{ ...faces.front, text: faceTexts(currentCard).front }}
+        back={{ ...faces.back, text: faceTexts(currentCard).back }}
+        flashcardId={currentCard.id as Id<'flashcards'>}
+        speakQuestion={speakQuestion}
+        speakAnswer={speakAnswer}
+      />
+    </>
+  );
 
   if (isFullscreen) {
     return (
-      <div className={`${isNativeFullscreen ? 'fixed inset-0' : 'fixed left-0 top-0'} bg-gray-900 flex flex-col items-center gap-4 p-4 sm:p-8 z-50`} style={{
+      <div className={`${isNativeFullscreen ? 'fixed inset-0' : 'fixed left-0 top-0'} bg-gray-900 flex flex-col items-center gap-4 p-4 sm:p-8 z-50 overflow-x-clip`} style={{
         ...(!isNativeFullscreen ? { width: '100dvw', height: '100dvh' } : {}),
         paddingTop: 'max(1rem, env(safe-area-inset-top))',
         paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
@@ -422,37 +500,7 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
           </button>
         </div>
 
-        <div
-          className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 sm:p-16 max-w-4xl w-full cursor-pointer transform transition-transform hover:scale-102 flex-1 min-h-0 overflow-auto"
-          onClick={toggleAnswer}
-        >
-          {dontKnowCards[currentCard.id] && (
-            <div className="absolute top-4 right-4 sm:top-6 sm:right-6 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-full">
-              Need to review
-            </div>
-          )}
-
-          <div className="flex flex-col justify-center items-center h-full">
-            <div className="text-base font-medium text-blue-600 dark:text-blue-400 mb-4 sm:mb-8">
-              {localFlipMode ? (
-                showAnswer ? 'QUESTION' : 'ANSWER'
-              ) : (
-                showAnswer ? 'ANSWER' : 'QUESTION'
-              )}
-            </div>
-            <div className="text-3xl sm:text-4xl md:text-5xl text-center leading-relaxed font-serif">
-              {showAnswer ? (
-                <div className="whitespace-pre-wrap">{getDisplayAnswer()}</div>
-              ) : (
-                <div className="whitespace-pre-wrap">{getDisplayQuestion()}</div>
-              )}
-            </div>
-          </div>
-
-          <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 text-sm text-gray-400">
-            Click to flip
-          </div>
-        </div>
+        <div className="grid flex-1 min-h-0 max-w-4xl w-full">{renderCards('lg')}</div>
 
         <div className="flex items-center w-full gap-3 flex-shrink-0">
           <IconNavButton
@@ -574,36 +622,10 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
         </div>
       </div>
 
-      <div
-        className="relative bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 min-h-[400px] cursor-pointer transform transition-transform hover:scale-102"
-        onClick={toggleAnswer}
-      >
-        {dontKnowCards[currentCard.id] && (
-          <div className="absolute top-4 right-4 px-3 py-1 bg-red-600 text-white text-xs font-medium rounded-full">
-            Need to review
-          </div>
-        )}
-
-        <div className="flex flex-col justify-center items-center h-full">
-          <div className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-6">
-            {localFlipMode ? (
-              showAnswer ? 'QUESTION' : 'ANSWER'
-            ) : (
-              showAnswer ? 'ANSWER' : 'QUESTION'
-            )}
-          </div>
-          <div className="text-3xl md:text-4xl text-center leading-relaxed font-serif">
-            {showAnswer ? (
-              <div className="whitespace-pre-wrap">{getDisplayAnswer()}</div>
-            ) : (
-              <div className="whitespace-pre-wrap">{getDisplayQuestion()}</div>
-            )}
-          </div>
-        </div>
-
-        <div className="absolute bottom-4 right-4 text-xs text-gray-400">
-          Click to flip
-        </div>
+      {/* Clip the slide-in overshoot so no page scrollbar flashes; the padding keeps room for the shadow. */}
+      {/* Clip the slide overshoot so no page scrollbar flashes; the padding keeps room for the shadow. */}
+      <div className="overflow-x-clip -mx-4 px-4">
+        <div className="grid">{renderCards('sm')}</div>
       </div>
 
       <div className="mt-6 flex items-center gap-2">
@@ -686,6 +708,7 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
             <button
               key={card.id}
               onClick={() => {
+                beginSlide(idx > currentIndex ? 'next' : 'prev');
                 setCurrentIndex(idx);
                 setShowAnswer(false);
               }}
@@ -783,5 +806,201 @@ function IconKnowButton({
         />
       </svg>
     </button>
+  );
+}
+
+interface SpeakButtonProps {
+  flashcardId: Id<'flashcards'>;
+  side: 'question' | 'answer';
+  size: 'sm' | 'lg';
+}
+
+/** Plays the pronunciation for one side of a card, generating it on first use. */
+function SpeakButton({ flashcardId, side, size }: SpeakButtonProps) {
+  const speak = useAction(api.audio.speak);
+  const [state, setState] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    setState('idle');
+    setError(null);
+    audioRef.current?.pause();
+    audioRef.current = null;
+  }, [flashcardId, side]);
+
+  useEffect(() => () => audioRef.current?.pause(), []);
+
+  const play = async () => {
+    if (state === 'loading') return;
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      void audioRef.current.play();
+      setState('playing');
+      return;
+    }
+
+    setState('loading');
+    setError(null);
+    try {
+      const { url } = await speak({ flashcardId, side });
+      const audio = new Audio(url);
+      audio.onended = () => setState('idle');
+      audio.onerror = () => {
+        setState('error');
+        setError('Could not play the audio.');
+      };
+      audioRef.current = audio;
+      await audio.play();
+      setState('playing');
+    } catch (caughtError) {
+      setState('error');
+      setError(caughtError instanceof Error ? caughtError.message : 'Could not read this card aloud.');
+    }
+  };
+
+  const iconSize = size === 'lg' ? 'h-7 w-7' : 'h-5 w-5';
+
+  return (
+    <span className="relative inline-flex items-center">
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          void play();
+        }}
+        disabled={state === 'loading'}
+        title={error ?? 'Read aloud'}
+        aria-label="Read aloud"
+        className={`inline-flex items-center justify-center rounded-full p-1.5 transition-colors ${
+          state === 'error'
+            ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-900/40'
+            : 'text-blue-600 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-900/40'
+        } disabled:cursor-wait`}
+      >
+        {state === 'loading' ? (
+          <span
+            className={`${iconSize} inline-block animate-spin rounded-full border-2 border-current border-t-transparent`}
+          />
+        ) : (
+          <svg
+            className={`${iconSize} ${state === 'playing' ? 'animate-pulse' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"
+            />
+          </svg>
+        )}
+      </button>
+    </span>
+  );
+}
+
+interface FlipFace {
+  label: string;
+  text: string;
+  side: 'question' | 'answer';
+}
+
+interface FlipCardProps {
+  flipped: boolean;
+  onToggle: () => void;
+  size: 'sm' | 'lg';
+  /** Entrance animation class for card changes; empty for none. */
+  enterClass: string;
+  /** Animate the flip; when false the faces swap instantly. */
+  animate: boolean;
+  needsReview: boolean;
+  front: FlipFace;
+  back: FlipFace;
+  flashcardId: Id<'flashcards'>;
+  speakQuestion: boolean;
+  speakAnswer: boolean;
+  onAnimationEnd?: () => void;
+}
+
+/**
+ * The whole card rotates around its vertical centre line. Each face is a
+ * complete card (background, shadow, padding, badge, hint), stacked in one
+ * grid cell; the back face is pre-rotated so it reads correctly once flipped.
+ * Key it per card so switching cards does not animate the flip.
+ */
+function FlipCard({
+  flipped,
+  onToggle,
+  size,
+  enterClass,
+  animate,
+  needsReview,
+  front,
+  back,
+  flashcardId,
+  speakQuestion,
+  speakAnswer,
+  onAnimationEnd,
+}: FlipCardProps) {
+  const large = size === 'lg';
+  const faceClass = large
+    ? 'relative flex flex-col justify-center items-center h-full overflow-auto bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 sm:p-16'
+    : 'relative flex flex-col justify-center items-center min-h-[400px] bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12';
+  const labelClass = large
+    ? 'flex items-center gap-3 text-base font-medium text-blue-600 dark:text-blue-400 mb-4 sm:mb-8'
+    : 'flex items-center gap-3 text-sm font-medium text-blue-600 dark:text-blue-400 mb-6';
+  const textClass = large
+    ? 'text-3xl sm:text-4xl md:text-5xl text-center leading-relaxed font-serif'
+    : 'text-3xl md:text-4xl text-center leading-relaxed font-serif';
+  const badgeClass = large
+    ? 'absolute top-4 right-4 sm:top-6 sm:right-6 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-full'
+    : 'absolute top-4 right-4 px-3 py-1 bg-red-600 text-white text-xs font-medium rounded-full';
+  const hintClass = large
+    ? 'absolute bottom-4 right-4 sm:bottom-6 sm:right-6 text-sm text-gray-400'
+    : 'absolute bottom-4 right-4 text-xs text-gray-400';
+
+  const renderFace = (face: FlipFace, isBack: boolean) => {
+    const canSpeak = face.side === 'question' ? speakQuestion : speakAnswer;
+    return (
+      <div
+        className={`[grid-area:1/1] [backface-visibility:hidden] ${faceClass} ${
+          isBack ? '[transform:rotateY(180deg)]' : ''
+        }`}
+        aria-hidden={isBack !== flipped}
+      >
+        {needsReview && <div className={badgeClass}>Need to review</div>}
+        <div className={labelClass}>
+          {face.label}
+          {canSpeak && <SpeakButton flashcardId={flashcardId} side={face.side} size={size} />}
+        </div>
+        <div className={textClass}>
+          <div className="whitespace-pre-wrap">{face.text}</div>
+        </div>
+        <div className={hintClass}>Click to flip</div>
+      </div>
+    );
+  };
+
+  return (
+    <div
+      className={`[grid-area:1/1] ${
+        large ? 'min-h-0 h-full' : ''
+      } [perspective:1200px] transform transition-transform hover:scale-102 ${enterClass}`}
+      onAnimationEnd={onAnimationEnd}
+    >
+      <div
+        className={`grid h-full cursor-pointer [transform-style:preserve-3d] ${
+          animate ? 'transition-transform duration-[300ms] ease-out' : ''
+        } ${flipped ? '[transform:rotateY(180deg)]' : ''}`}
+        onClick={onToggle}
+      >
+        {renderFace(front, false)}
+        {renderFace(back, true)}
+      </div>
+    </div>
   );
 }
