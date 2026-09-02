@@ -67,11 +67,19 @@ function formatContextLength(contextLength?: number) {
   return `${contextLength} context`;
 }
 
+// Multimodal chat models only: they must read both text and images, and
+// produce text only. This excludes image-generation models (which also emit
+// images) and models without text input.
 function isVisionTextModel(model: OpenRouterModel) {
   const inputModalities = model.architecture?.input_modalities ?? [];
   const outputModalities = model.architecture?.output_modalities ?? [];
 
-  return inputModalities.includes('image') && outputModalities.includes('text');
+  return (
+    inputModalities.includes('image') &&
+    inputModalities.includes('text') &&
+    outputModalities.length > 0 &&
+    outputModalities.every((modality) => modality === 'text')
+  );
 }
 
 function toModelOption(model: OpenRouterModel): ModelOption {
