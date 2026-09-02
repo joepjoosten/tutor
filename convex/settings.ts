@@ -22,7 +22,48 @@ export const getUserSettings = query({
     return {
       hasOpenRouterKey: Boolean(settings?.openRouterKeyCiphertext),
       openRouterKeyLast4: settings?.openRouterKeyLast4 ?? null,
+      preferredModel: settings?.preferredModel ?? null,
     };
+  },
+});
+
+export const setPreferredModel = mutation({
+  args: {
+    model: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx);
+    const model = args.model.trim();
+    if (model === "") {
+      throw new Error("Choose a model.");
+    }
+    const now = Date.now();
+    const docId = await getSettingsDocId(ctx, userId);
+
+    if (docId) {
+      await ctx.db.patch(docId, { preferredModel: model, updatedAt: now });
+    } else {
+      await ctx.db.insert("userSettings", {
+        userId,
+        preferredModel: model,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+  },
+});
+
+export const getPreferredModel = internalQuery({
+  args: {
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const settings = await ctx.db
+      .query("userSettings")
+      .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .unique();
+
+    return settings?.preferredModel ?? null;
   },
 });
 

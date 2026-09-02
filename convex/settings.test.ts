@@ -109,11 +109,13 @@ describe("settings:setOpenRouterKey", () => {
       _id: "settings-doc-id",
       openRouterKeyCiphertext: "encrypted-value",
       openRouterKeyLast4: "9876",
+      preferredModel: "openai/gpt-5.6-terra",
     } as never);
 
     await expect(handlerOf(getUserSettings)(ctx as never, {} as never)).resolves.toEqual({
       hasOpenRouterKey: true,
       openRouterKeyLast4: "9876",
+      preferredModel: "openai/gpt-5.6-terra",
     });
   });
 
