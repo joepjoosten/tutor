@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { ClipboardEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import NextImage from 'next/image';
 import { useAction, useMutation, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
@@ -28,7 +28,7 @@ const SUGGESTIONS = [
 ];
 
 const GENERATE_GREETING =
-  'Add photos of your homework or study material with the + button, or just describe what you want to learn, and I will make flashcards.';
+  'Add photos of your homework or study material with the + button or by pasting a screenshot, or just describe what you want to learn, and I will make flashcards.';
 
 export default function FlashcardChat({ setId, onGenerated, tall }: FlashcardChatProps) {
   const settings = useQuery(api.settings.getUserSettings);
@@ -100,6 +100,25 @@ export default function FlashcardChat({ setId, onGenerated, tall }: FlashcardCha
     }
   };
 
+  /** Pasted images (e.g. a macOS screenshot) become attachments. */
+  const handlePaste = (event: ClipboardEvent<HTMLElement>) => {
+    if (busy) return;
+    const files = Array.from(event.clipboardData?.items ?? [])
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null)
+      .map((file, index) => {
+        // Clipboard images are often all called "image.png"; give them distinct names.
+        const extension = file.type.split('/')[1] || 'png';
+        return new File([file], `pasted-${Date.now()}-${index + 1}.${extension}`, {
+          type: file.type,
+        });
+      });
+    if (files.length === 0) return;
+    event.preventDefault();
+    void attachments.addFiles(files);
+  };
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void submit(draft);
@@ -128,6 +147,7 @@ export default function FlashcardChat({ setId, onGenerated, tall }: FlashcardCha
       className={`flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow-md ${
         tall ? 'min-h-[60vh]' : ''
       }`}
+      onPaste={handlePaste}
     >
       <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-700 sm:px-6">
         <div>

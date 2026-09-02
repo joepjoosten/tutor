@@ -35,6 +35,7 @@ export default defineSchema({
     backLanguage: v.optional(v.string()),
     speakFront: v.optional(v.boolean()),
     speakBack: v.optional(v.boolean()),
+    lastStudiedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_userId", ["userId"])
