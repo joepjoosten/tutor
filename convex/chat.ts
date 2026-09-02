@@ -7,7 +7,7 @@ import {
 } from "./_generated/server";
 import { v } from "convex/values";
 import { makeFunctionReference } from "convex/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { decryptSecret, requireUser } from "./lib";
 import {
   DEFAULT_CHAT_MODEL,
@@ -18,6 +18,9 @@ import {
 } from "./chatAgent";
 
 const MAX_HISTORY_MESSAGES = 40;
+// Photos attached to the model per turn: the set's source pages plus the most
+// recent photos from the conversation. Each photo costs tokens on every turn.
+const MAX_ATTACHED_IMAGES = 10;
 
 const toolActionValidator = v.array(
   v.object({
@@ -25,6 +28,18 @@ const toolActionValidator = v.array(
     summary: v.string(),
   })
 );
+
+async function requireOwnedSet(
+  ctx: { db: { get: (id: Id<"flashcardSets">) => Promise<Doc<"flashcardSets"> | null> } },
+  userId: string,
+  setId: Id<"flashcardSets">
+) {
+  const set = await ctx.db.get(setId);
+  if (!set || set.userId !== userId) {
+    throw new Error("Flashcard set not found.");
+  }
+  return set;
+}
 
 export const listMessages = query({
   args: { setId: v.id("flashcardSets") },
@@ -34,10 +49,30 @@ export const listMessages = query({
     if (!set || set.userId !== userId) {
       return [];
     }
-    return ctx.db
+    const messages = await ctx.db
       .query("chatMessages")
       .withIndex("by_setId_createdAt", (q) => q.eq("setId", args.setId))
       .collect();
+
+    return Promise.all(
+      messages.map(async (message) => {
+        const images = await Promise.all(
+          (message.imageIds ?? []).map(async (imageId) => {
+            const image = await ctx.db.get(imageId);
+            if (!image || image.userId !== userId) return null;
+            return { id: imageId, url: await ctx.storage.getUrl(image.storageId) };
+          })
+        );
+        return {
+          _id: message._id,
+          role: message.role,
+          content: message.content,
+          toolActions: message.toolActions,
+          createdAt: message.createdAt,
+          images: images.filter((image) => image !== null),
+        };
+      })
+    );
   },
 });
 
@@ -45,10 +80,7 @@ export const clearMessages = mutation({
   args: { setId: v.id("flashcardSets") },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
-    const set = await ctx.db.get(args.setId);
-    if (!set || set.userId !== userId) {
-      throw new Error("Flashcard set not found.");
-    }
+    await requireOwnedSet(ctx, userId, args.setId);
     const messages = await ctx.db
       .query("chatMessages")
       .withIndex("by_setId_createdAt", (q) => q.eq("setId", args.setId))
@@ -58,35 +90,63 @@ export const clearMessages = mutation({
 });
 
 export const getChatContext = internalQuery({
-  args: { userId: v.string(), setId: v.id("flashcardSets") },
+  args: {
+    userId: v.string(),
+    setId: v.id("flashcardSets"),
+    imageIds: v.array(v.id("images")),
+  },
   handler: async (ctx, args) => {
-    const set = await ctx.db.get(args.setId);
-    if (!set || set.userId !== args.userId) {
-      throw new Error("Flashcard set not found.");
-    }
+    const set = await requireOwnedSet(ctx, args.userId, args.setId);
 
     const messages = await ctx.db
       .query("chatMessages")
       .withIndex("by_setId_createdAt", (q) => q.eq("setId", args.setId))
       .collect();
+    const history = messages.slice(-MAX_HISTORY_MESSAGES);
 
     const interaction = set.llmInteractionId
       ? await ctx.db.get(set.llmInteractionId)
       : null;
-    const loadedImages = interaction
-      ? await Promise.all(interaction.imageIds.map((imageId) => ctx.db.get(imageId)))
-      : [];
+
+    // Source pages first, then photos from the conversation, newest last.
+    const orderedImageIds: Array<Id<"images">> = [
+      ...(interaction?.imageIds ?? []),
+      ...history.flatMap((message) => message.imageIds ?? []),
+      ...args.imageIds,
+    ];
+    const seen = new Set<string>();
+    const uniqueImageIds = orderedImageIds.filter((imageId) => {
+      if (seen.has(imageId)) return false;
+      seen.add(imageId);
+      return true;
+    });
+    // Keep the source pages and the most recent conversation photos.
+    const sourceCount = interaction?.imageIds.length ?? 0;
+    const keptSource = uniqueImageIds.slice(0, sourceCount).slice(0, MAX_ATTACHED_IMAGES);
+    const room = MAX_ATTACHED_IMAGES - keptSource.length;
+    const keptConversation = room > 0 ? uniqueImageIds.slice(sourceCount).slice(-room) : [];
+    const keptImageIds = [...keptSource, ...keptConversation];
+
+    const loadedImages = await Promise.all(keptImageIds.map((imageId) => ctx.db.get(imageId)));
     const images = loadedImages.filter(
       (image): image is NonNullable<typeof image> =>
         image !== null && image.userId === args.userId
     );
 
+    for (const imageId of args.imageIds) {
+      const image = await ctx.db.get(imageId);
+      if (!image || image.userId !== args.userId) {
+        throw new Error("One of the attached photos could not be found. Please add it again.");
+      }
+    }
+
     return {
       defaultModel: interaction?.model ?? null,
-      history: messages.slice(-MAX_HISTORY_MESSAGES).map((message) => ({
+      history: history.map((message) => ({
         id: message._id,
         role: message.role,
         content: message.content,
+        imageCount: message.imageIds?.length ?? 0,
       })),
       images: images.map((image) => ({
         storageId: image.storageId,
@@ -102,6 +162,7 @@ export const appendTurn = internalMutation({
     userId: v.string(),
     setId: v.id("flashcardSets"),
     userMessage: v.string(),
+    userImageIds: v.array(v.id("images")),
     assistantMessage: v.string(),
     toolActions: toolActionValidator,
   },
@@ -112,6 +173,7 @@ export const appendTurn = internalMutation({
       setId: args.setId,
       role: "user",
       content: args.userMessage,
+      imageIds: args.userImageIds.length > 0 ? args.userImageIds : undefined,
       createdAt: now,
     });
     await ctx.db.insert("chatMessages", {
@@ -133,12 +195,23 @@ const getEncryptedOpenRouterKeyRef = makeFunctionReference<
   string | null
 >("settings:getEncryptedOpenRouterKey");
 
+const getPreferredModelRef = makeFunctionReference<
+  "query",
+  { userId: string },
+  string | null
+>("settings:getPreferredModel");
+
 const getChatContextRef = makeFunctionReference<
   "query",
-  { userId: string; setId: Id<"flashcardSets"> },
+  { userId: string; setId: Id<"flashcardSets">; imageIds: Array<Id<"images">> },
   {
     defaultModel: string | null;
-    history: Array<{ id: string; role: "user" | "assistant"; content: string }>;
+    history: Array<{
+      id: string;
+      role: "user" | "assistant";
+      content: string;
+      imageCount: number;
+    }>;
     images: Array<{ storageId: Id<"_storage">; mimeType: string; filename: string }>;
   }
 >("chat:getChatContext");
@@ -149,6 +222,7 @@ const appendTurnRef = makeFunctionReference<
     userId: string;
     setId: Id<"flashcardSets">;
     userMessage: string;
+    userImageIds: Array<Id<"images">>;
     assistantMessage: string;
     toolActions: Array<{ tool: string; summary: string }>;
   },
@@ -189,17 +263,78 @@ const updateFlashcardSetRef = makeFunctionReference<
   unknown
 >("flashcards:updateFlashcardSet");
 
+const generateFlashcardsRef = makeFunctionReference<
+  "action",
+  { imageIds: Array<Id<"images">>; model: string; customInstructions?: string },
+  {
+    flashcardSet: { _id: Id<"flashcardSets">; title: string } | null;
+    flashcards: Array<{ _id: Id<"flashcards"> }>;
+  }
+>("generation:generateFlashcards");
+
+const DEFAULT_GENERATE_MESSAGE = "Make flashcards from these photos.";
+
+/**
+ * First turn of a chat: creates a set from the attached photos, then records
+ * the exchange so the conversation can continue on that set.
+ */
+export const generateFromImages = action({
+  args: {
+    imageIds: v.array(v.id("images")),
+    message: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx);
+    if (args.imageIds.length === 0) {
+      throw new Error("Add at least one photo first.");
+    }
+    const message = args.message.trim();
+    const model = (await ctx.runQuery(getPreferredModelRef, { userId })) ?? DEFAULT_CHAT_MODEL;
+
+    const result = await ctx.runAction(generateFlashcardsRef, {
+      imageIds: args.imageIds,
+      model,
+      customInstructions: message === "" ? undefined : message,
+    });
+    if (!result.flashcardSet) {
+      throw new Error("The flashcard set could not be created.");
+    }
+
+    const count = result.flashcards.length;
+    const reply = `I made the set "${result.flashcardSet.title}" with ${count} flashcard${
+      count === 1 ? "" : "s"
+    }. Have a look below. Tell me what to change, or add more photos to make more cards.`;
+
+    await ctx.runMutation(appendTurnRef, {
+      userId,
+      setId: result.flashcardSet._id,
+      userMessage: message === "" ? DEFAULT_GENERATE_MESSAGE : message,
+      userImageIds: args.imageIds,
+      assistantMessage: reply,
+      toolActions: [],
+    });
+
+    return { setId: result.flashcardSet._id, title: result.flashcardSet.title, count };
+  },
+});
+
 export const sendMessage = action({
   args: {
     setId: v.id("flashcardSets"),
     message: v.string(),
-    model: v.optional(v.string()),
+    imageIds: v.optional(v.array(v.id("images"))),
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
-    const message = args.message.trim();
+    const attachedImageIds = args.imageIds ?? [];
+    const message =
+      args.message.trim() !== ""
+        ? args.message.trim()
+        : attachedImageIds.length > 0
+          ? "Have a look at these photos."
+          : "";
     if (message === "") {
-      throw new Error("Type a message first.");
+      throw new Error("Type a message or add a photo first.");
     }
 
     const encryptedKey = await ctx.runQuery(getEncryptedOpenRouterKeyRef, { userId });
@@ -207,8 +342,13 @@ export const sendMessage = action({
       throw new Error("Add your OpenRouter API key in Settings before chatting.");
     }
     const apiKey = await decryptSecret(encryptedKey);
+    const preferredModel = await ctx.runQuery(getPreferredModelRef, { userId });
 
-    const context = await ctx.runQuery(getChatContextRef, { userId, setId: args.setId });
+    const context = await ctx.runQuery(getChatContextRef, {
+      userId,
+      setId: args.setId,
+      imageIds: attachedImageIds,
+    });
 
     // The public flashcard mutations check ownership through the auth context,
     // which Convex propagates from this action.
@@ -261,10 +401,11 @@ export const sendMessage = action({
 
     const result = await runFlashcardChat({
       apiKey,
-      model: args.model ?? context.defaultModel ?? DEFAULT_CHAT_MODEL,
+      model: preferredModel ?? context.defaultModel ?? DEFAULT_CHAT_MODEL,
       set: await getSet(),
       history: context.history,
       images,
+      newImageCount: attachedImageIds.length,
       message,
       store,
     });
@@ -273,6 +414,7 @@ export const sendMessage = action({
       userId,
       setId: args.setId,
       userMessage: message,
+      userImageIds: attachedImageIds,
       assistantMessage: result.reply,
       toolActions: [...result.toolActions],
     });

@@ -27,6 +27,8 @@ export interface ChatHistoryMessage {
   readonly id: string;
   readonly role: "user" | "assistant";
   readonly content: string;
+  /** Number of photos the student attached to this message. */
+  readonly imageCount?: number;
 }
 
 export interface ChatImage {
@@ -61,7 +63,10 @@ export interface RunChatOptions {
   readonly apiUrl?: string;
   readonly set: ChatSet;
   readonly history: ReadonlyArray<ChatHistoryMessage>;
+  /** Photos to attach: the set's source pages and recent conversation photos. */
   readonly images: ReadonlyArray<ChatImage>;
+  /** How many of those photos the student attached to this very message. */
+  readonly newImageCount?: number;
   readonly message: string;
   readonly store: FlashcardChatStore;
 }
@@ -83,7 +88,7 @@ export function formatCards(cards: ReadonlyArray<ChatCard>) {
     .join("\n\n");
 }
 
-export function buildSystemPrompt(set: ChatSet, hasImages: boolean) {
+export function buildSystemPrompt(set: ChatSet, hasImages: boolean, newImageCount = 0) {
   const lines = [
     "You are a friendly study assistant helping a student refine a set of flashcards that were generated from photos of their study material.",
     "",
@@ -100,9 +105,12 @@ export function buildSystemPrompt(set: ChatSet, hasImages: boolean) {
     "- When the student asks a question about the material, answer it directly and offer to add a card if that would help.",
     "- Reply in the student's language. Keep replies short; use plain text, no markdown tables.",
     hasImages
-      ? "- The original photos of the study material are attached to the student's message. Check them when judging whether a question or answer is correct or complete."
-      : "- The original photos are not available in this conversation; rely on the flashcards and the student's input.",
-  ];
+      ? "- Photos of the study material are attached to the student's message: the pages the set was made from, followed by any photos added later in the conversation. Check them when judging whether a question or answer is correct or complete."
+      : "- No photos are available in this conversation; rely on the flashcards and the student's input.",
+    newImageCount > 0
+      ? `- The last ${newImageCount === 1 ? "photo is" : `${newImageCount} photos are`} new: the student attached ${newImageCount === 1 ? "it" : "them"} to this message. If they want flashcards from new photos, add them with add_flashcard, one call per card, covering the important content.`
+      : null,
+  ].filter((line): line is string => line !== null);
   return lines.join("\n");
 }
 
@@ -121,7 +129,13 @@ function historyToPrompt(history: ReadonlyArray<ChatHistoryMessage>): Array<Prom
             },
           ],
         }
-      : { role: "user" as const, content: message.content }
+      : {
+          role: "user" as const,
+          content:
+            message.imageCount && message.imageCount > 0
+              ? `${message.content}\n[attached ${message.imageCount} photo${message.imageCount === 1 ? "" : "s"}]`
+              : message.content,
+        }
   );
 }
 
@@ -129,9 +143,10 @@ export function buildPrompt(options: {
   set: ChatSet;
   history: ReadonlyArray<ChatHistoryMessage>;
   images: ReadonlyArray<ChatImage>;
+  newImageCount?: number;
   message: string;
 }): Array<Prompt.MessageEncoded> {
-  const { set, history, images, message } = options;
+  const { set, history, images, message, newImageCount = 0 } = options;
   const userMessage: Prompt.MessageEncoded =
     images.length === 0
       ? { role: "user", content: message }
@@ -149,7 +164,7 @@ export function buildPrompt(options: {
         };
 
   return [
-    { role: "system", content: buildSystemPrompt(set, images.length > 0) },
+    { role: "system", content: buildSystemPrompt(set, images.length > 0, newImageCount) },
     ...historyToPrompt(history),
     userMessage,
   ];
@@ -309,6 +324,7 @@ export function runFlashcardChat(options: RunChatOptions): Promise<ChatResult> {
         set: options.set,
         history: options.history,
         images: options.images,
+        newImageCount: options.newImageCount,
         message: options.message,
       })
     );

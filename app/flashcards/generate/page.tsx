@@ -3,95 +3,24 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAction, useQuery } from 'convex/react';
+import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import type { Id } from '@/convex/_generated/dataModel';
 import { authClient } from '@/lib/auth-client';
 import AuthCard from '@/components/AuthCard';
-import ImageUpload from '@/components/ImageUpload';
-import ModelSelector from '@/components/ModelSelector';
-import FlashcardViewer from '@/components/FlashcardViewer';
 import FlashcardChat from '@/components/FlashcardChat';
-
-interface UploadedImage {
-  id: Id<'images'>;
-  url: string | null;
-  preview: string;
-}
-
-interface GeneratedResult {
-  flashcardSet: {
-    _id: Id<'flashcardSets'>;
-    title: string;
-    description?: string;
-    flipMode: boolean;
-    createdAt: number;
-  } | null;
-  flashcards: Array<{
-    _id: Id<'flashcards'>;
-    question: string;
-    answer: string;
-    orderIndex: number;
-  }>;
-}
+import FlashcardViewer from '@/components/FlashcardViewer';
 
 export default function GenerateFromImagesPage() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const router = useRouter();
-  const generateFlashcards = useAction(api.generation.generateFlashcards);
   const settings = useQuery(api.settings.getUserSettings, session ? {} : 'skip');
 
-  const [images, setImages] = useState<UploadedImage[]>([]);
-  const [selectedModel, setSelectedModel] = useState('');
-  const [customInstructions, setCustomInstructions] = useState('');
-  const [generating, setGenerating] = useState(false);
-  const [result, setResult] = useState<GeneratedResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [setId, setSetId] = useState<Id<'flashcardSets'> | null>(null);
 
-  // Once a set exists, read it live so edits made through the chat show up.
-  const generatedSetId = result?.flashcardSet?._id;
-  const liveSet = useQuery(
-    api.flashcards.getFlashcardSet,
-    generatedSetId ? { setId: generatedSetId } : 'skip'
-  );
+  const flashcardSet = useQuery(api.flashcards.getFlashcardSet, setId ? { setId } : 'skip');
 
-  const handleImagesChange = (newImages: UploadedImage[]) => {
-    setImages(newImages);
-    setError(null);
-  };
-
-  const handleGenerate = async () => {
-    if (images.length === 0) {
-      setError('Please upload at least one image');
-      return;
-    }
-
-    setGenerating(true);
-    setError(null);
-
-    try {
-      const generated = await generateFlashcards({
-        imageIds: images.map((img) => img.id),
-        model: selectedModel,
-        customInstructions: customInstructions.trim() || undefined,
-      });
-
-      setResult(generated);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate flashcards');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const resetUpload = () => {
-    setImages([]);
-    setCustomInstructions('');
-    setResult(null);
-    setError(null);
-  };
-
-  if (sessionPending) {
+  if (sessionPending || (session && settings === undefined)) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-12 text-center text-gray-600 dark:text-gray-300">
         Loading...
@@ -115,15 +44,7 @@ export default function GenerateFromImagesPage() {
     );
   }
 
-  if (settings === undefined) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-12 text-center text-gray-600 dark:text-gray-300">
-        Loading...
-      </div>
-    );
-  }
-
-  if (!settings.hasOpenRouterKey) {
+  if (!settings?.hasOpenRouterKey) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 text-center">
@@ -131,7 +52,7 @@ export default function GenerateFromImagesPage() {
             Add an AI key to generate flashcards
           </h2>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Generating flashcards from images uses your own OpenRouter API key.
+            Generating flashcards from photos uses your own OpenRouter API key.
           </p>
           <Link
             href="/settings"
@@ -144,152 +65,84 @@ export default function GenerateFromImagesPage() {
     );
   }
 
-  if (result?.flashcardSet) {
-    const setId = result.flashcardSet._id;
-    const currentSet = liveSet ?? result.flashcardSet;
-    const currentCards = liveSet?.flashcards ?? result.flashcards;
-    const mappedCards = currentCards.map((card) => ({
-      id: card._id,
-      question: card.question,
-      answer: card.answer,
-      order_index: card.orderIndex,
-    }));
-
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <div className="space-y-6">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {currentSet.title}
-                </h3>
-                {currentSet.description && (
-                  <p className="text-gray-600 dark:text-gray-400 mt-1">
-                    {currentSet.description}
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={resetUpload}
-                className="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-              >
-                Create New Set
-              </button>
-            </div>
-
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              {mappedCards.length} flashcard{mappedCards.length !== 1 ? 's' : ''}
-            </div>
-          </div>
-
-          <FlashcardViewer
-            flashcards={mappedCards}
-            setId={setId}
-            flipMode={currentSet.flipMode}
-            onUpdate={() => {}}
-          />
-
-          <FlashcardChat setId={setId} />
-
-          <div className="flex justify-center gap-3 flex-wrap">
-            <button
-              onClick={() => router.push(`/flashcards/${setId}/study`)}
-              className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg shadow-md transition-colors"
-            >
-              View in My Flashcards
-            </button>
-            <button
-              onClick={() => router.push('/flashcards')}
-              className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium rounded-lg shadow-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-            >
-              All Flashcard Sets
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-      <div className="text-center mb-8">
+      <div className="text-center mb-6">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Generate Flashcards from Images
+          Generate flashcards with AI
         </h2>
         <p className="text-gray-600 dark:text-gray-400">
-          Upload pictures of homework or study material, and AI will create flashcards to help you learn
+          Add photos of homework or study material, chat with the AI, and refine the cards together
         </p>
       </div>
 
       <div className="space-y-6">
-        <ImageUpload onImagesChange={handleImagesChange} />
+        <FlashcardChat
+          setId={setId}
+          onGenerated={setSetId}
+          tall={setId === null}
+        />
 
-        {images.length > 0 && (
+        {setId && flashcardSet && (
           <>
-            <ModelSelector
-              value={selectedModel}
-              onChange={setSelectedModel}
-              disabled={generating}
-            />
-
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-              <label className="block text-sm font-medium mb-2">
-                Additional Instructions (Optional)
-              </label>
-              <textarea
-                value={customInstructions}
-                onChange={(e) => setCustomInstructions(e.target.value)}
-                disabled={generating}
-                placeholder="E.g., 'Focus on vocabulary words', 'Include step-by-step math solutions', 'Make questions for a 5th grader', etc."
-                rows={4}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed resize-none"
-              />
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Provide specific guidance for the AI on what kind of flashcards to create
-              </p>
+              <div className="flex justify-between items-start gap-4 mb-2">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {flashcardSet.title}
+                  </h3>
+                  {flashcardSet.description && (
+                    <p className="text-gray-600 dark:text-gray-400 mt-1">
+                      {flashcardSet.description}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setSetId(null)}
+                  className="shrink-0 px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Start a new set
+                </button>
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {flashcardSet.flashcards.length} flashcard
+                {flashcardSet.flashcards.length !== 1 ? 's' : ''}
+              </div>
             </div>
 
-            <button
-              onClick={() => void handleGenerate()}
-              disabled={generating}
-              className="w-full py-4 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-lg rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {generating ? (
-                <span className="flex items-center justify-center">
-                  <svg
-                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Generating Flashcards...
-                </span>
-              ) : (
-                `Generate Flashcards from ${images.length} Image${images.length > 1 ? 's' : ''}`
-              )}
-            </button>
-          </>
-        )}
+            <FlashcardViewer
+              flashcards={flashcardSet.flashcards.map((card) => ({
+                id: card._id,
+                question: card.question,
+                answer: card.answer,
+                order_index: card.orderIndex,
+              }))}
+              setId={flashcardSet._id}
+              flipMode={flashcardSet.flipMode}
+              onUpdate={() => {}}
+            />
 
-        {error && (
-          <div className="p-4 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded-lg">
-            {error}
-          </div>
+            <div className="flex justify-center gap-3 flex-wrap">
+              <button
+                onClick={() => router.push(`/flashcards/${setId}/edit`)}
+                className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg shadow-md transition-colors"
+              >
+                Edit cards
+              </button>
+              <button
+                onClick={() => router.push(`/flashcards/${setId}/study`)}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md transition-colors"
+              >
+                Study this set
+              </button>
+              <button
+                onClick={() => router.push('/flashcards')}
+                className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium rounded-lg shadow-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+              >
+                All flashcard sets
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>
