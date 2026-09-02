@@ -13,6 +13,8 @@ export default function FlashcardsPage() {
   const { data: session, isPending: sessionPending } = authClient.useSession();
 
   const rawSets = useQuery(api.flashcards.listFlashcardSets, session ? {} : 'skip');
+  const settings = useQuery(api.settings.getUserSettings, session ? {} : 'skip');
+  const canGenerate = settings?.hasOpenRouterKey === true;
   const createSet = useMutation(api.flashcards.createFlashcardSet);
 
   const [isCreatingSet, setIsCreatingSet] = useState(false);
@@ -123,12 +125,14 @@ export default function FlashcardsPage() {
           >
             New Empty Set
           </button>
-          <Link
-            href="/flashcards/generate"
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-          >
-            Generate from Images
-          </Link>
+          {canGenerate && (
+            <Link
+              href="/flashcards/generate"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            >
+              Generate from Images
+            </Link>
+          )}
         </div>
       </div>
 
@@ -204,12 +208,14 @@ export default function FlashcardsPage() {
             >
               New Empty Set
             </button>
-            <Link
-              href="/flashcards/generate"
-              className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md transition-colors"
-            >
-              Generate Flashcards
-            </Link>
+            {canGenerate && (
+              <Link
+                href="/flashcards/generate"
+                className="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md transition-colors"
+              >
+                Generate Flashcards
+              </Link>
+            )}
           </div>
         </div>
       ) : (
