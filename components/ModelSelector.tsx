@@ -36,9 +36,10 @@ interface CachedModelsPayload {
   models: ModelOption[];
 }
 
-const MODEL_CACHE_KEY = 'openrouter-vision-models-v2';
+const MODEL_CACHE_KEY = 'openrouter-vision-models-v3';
 const MODEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const PREFERRED_MODEL_ORDER = [
+  'openai/gpt-5.6-terra',
   'google/gemini-2.5-flash',
   'openai/gpt-5.4',
   'openai/gpt-5.4-nano',
