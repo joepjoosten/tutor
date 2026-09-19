@@ -226,47 +226,6 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
     };
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Handle 's' key for audio toggle
-      if (event.key === 's' || event.key === 'S') {
-        if (audioToggleRef.current) {
-          event.preventDefault();
-          audioToggleRef.current();
-        }
-        return;
-      }
-
-      // Handle arrow keys for navigation
-      if (visibleCards.length <= 1) return;
-
-      if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        // Navigate to previous card
-        slideDirectionRef.current = 'prev';
-        if (animations && currentCard) {
-          setOutgoing({ card: currentCard, flipped: showAnswer, direction: 'prev' });
-        }
-        setShowAnswer(false);
-        setCurrentIndex((prev) => (prev - 1 + visibleCards.length) % visibleCards.length);
-      } else if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        // Navigate to next card
-        slideDirectionRef.current = 'next';
-        if (animations && currentCard) {
-          setOutgoing({ card: currentCard, flipped: showAnswer, direction: 'next' });
-        }
-        setShowAnswer(false);
-        setCurrentIndex((prev) => (prev + 1) % visibleCards.length);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [visibleCards.length, animations, currentCard, showAnswer]);
-
   if (visibleCards.length === 0) {
     const defaultEmptyDescription =
       'This set does not have any flashcards yet.';
@@ -331,6 +290,37 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   const toggleAnswer = () => {
     setShowAnswer(!showAnswer);
   };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Handle 's' key for audio toggle
+      if (event.key === 's' || event.key === 'S') {
+        if (audioToggleRef.current) {
+          event.preventDefault();
+          audioToggleRef.current();
+        }
+        return;
+      }
+
+      // Handle arrow keys for navigation
+      if (visibleCards.length <= 1) return;
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        prevCard();
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        nextCard();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleCards.length]);
 
   const markDontKnow = async () => {
     if (dontKnowCards[currentCard.id]) {
