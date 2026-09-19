@@ -101,6 +101,8 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   const [sharedProgressLoaded, setSharedProgressLoaded] = useState(
     props.mode === 'owner'
   );
+  // Reference to the currently visible audio toggle function for keyboard shortcut
+  const audioToggleRef = useRef<(() => void) | null>(null);
 
   const isIOS = () => {
     if (typeof window === 'undefined') return false;
@@ -223,6 +225,56 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Handle 's' key for audio toggle
+      if (event.key === 's' || event.key === 'S') {
+        if (audioToggleRef.current) {
+          event.preventDefault();
+          audioToggleRef.current();
+        }
+        return;
+      }
+
+      // Handle arrow keys for navigation
+      if (visibleCards.length <= 1) return;
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        // Navigate to previous card
+        slideDirectionRef.current = 'prev';
+        if (animations) {
+          const currentCardId = activeDisplayOrder[currentIndex] ?? visibleCardIds[currentIndex] ?? visibleCardIds[0];
+          const currentCard = currentCardId ? visibleCardsById.get(currentCardId) : undefined;
+          if (currentCard) {
+            setOutgoing({ card: currentCard, flipped: showAnswer, direction: 'prev' });
+          }
+        }
+        setShowAnswer(false);
+        setCurrentIndex((prev) => (prev - 1 + visibleCards.length) % visibleCards.length);
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        // Navigate to next card
+        slideDirectionRef.current = 'next';
+        if (animations) {
+          const currentCardId = activeDisplayOrder[currentIndex] ?? visibleCardIds[currentIndex] ?? visibleCardIds[0];
+          const currentCard = currentCardId ? visibleCardsById.get(currentCardId) : undefined;
+          if (currentCard) {
+            setOutgoing({ card: currentCard, flipped: showAnswer, direction: 'next' });
+          }
+        }
+        setShowAnswer(false);
+        setCurrentIndex((prev) => (prev + 1) % visibleCards.length);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [visibleCards.length, animations, currentIndex, showAnswer, activeDisplayOrder, visibleCardIds, visibleCardsById]);
 
   if (visibleCards.length === 0) {
     const defaultEmptyDescription =
@@ -456,6 +508,9 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
         flashcardId={currentCard.id as Id<'flashcards'>}
         speakQuestion={speakQuestion}
         speakAnswer={speakAnswer}
+        onAudioToggleRef={(toggle) => {
+          audioToggleRef.current = toggle;
+        }}
       />
     </>
   );
@@ -813,12 +868,13 @@ interface SpeakButtonProps {
   flashcardId: Id<'flashcards'>;
   side: 'question' | 'answer';
   size: 'sm' | 'lg';
+  onToggleRef?: (toggle: () => void) => void;
 }
 
 /** Plays the pronunciation for one side of a card, generating it on first use. */
-function SpeakButton({ flashcardId, side, size }: SpeakButtonProps) {
+function SpeakButton({ flashcardId, side, size, onToggleRef }: SpeakButtonProps) {
   const speak = useAction(api.audio.speak);
-  const [state, setState] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
+  const [state, setState] = useState<'idle' | 'loading' | 'playing' | 'paused' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -833,7 +889,14 @@ function SpeakButton({ flashcardId, side, size }: SpeakButtonProps) {
 
   const play = async () => {
     if (state === 'loading') return;
-    if (audioRef.current) {
+
+    if (audioRef.current && state === 'paused') {
+      void audioRef.current.play();
+      setState('playing');
+      return;
+    }
+
+    if (audioRef.current && state === 'idle') {
       audioRef.current.currentTime = 0;
       void audioRef.current.play();
       setState('playing');
@@ -859,6 +922,28 @@ function SpeakButton({ flashcardId, side, size }: SpeakButtonProps) {
     }
   };
 
+  const pause = () => {
+    if (audioRef.current && state === 'playing') {
+      audioRef.current.pause();
+      setState('paused');
+    }
+  };
+
+  const toggle = () => {
+    if (state === 'playing') {
+      pause();
+    } else {
+      void play();
+    }
+  };
+
+  useEffect(() => {
+    if (onToggleRef) {
+      onToggleRef(toggle);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, onToggleRef]);
+
   const iconSize = size === 'lg' ? 'h-7 w-7' : 'h-5 w-5';
 
   return (
@@ -867,11 +952,11 @@ function SpeakButton({ flashcardId, side, size }: SpeakButtonProps) {
         type="button"
         onClick={(event) => {
           event.stopPropagation();
-          void play();
+          toggle();
         }}
         disabled={state === 'loading'}
-        title={error ?? 'Read aloud'}
-        aria-label="Read aloud"
+        title={error ?? (state === 'playing' ? 'Pause' : 'Play')}
+        aria-label={state === 'playing' ? 'Pause' : 'Play'}
         className={`inline-flex items-center justify-center rounded-full p-1.5 transition-colors ${
           state === 'error'
             ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-900/40'
@@ -882,9 +967,9 @@ function SpeakButton({ flashcardId, side, size }: SpeakButtonProps) {
           <span
             className={`${iconSize} inline-block animate-spin rounded-full border-2 border-current border-t-transparent`}
           />
-        ) : (
+        ) : state === 'playing' ? (
           <svg
-            className={`${iconSize} ${state === 'playing' ? 'animate-pulse' : ''}`}
+            className={iconSize}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -894,7 +979,28 @@ function SpeakButton({ flashcardId, side, size }: SpeakButtonProps) {
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"
+              d="M10 9v6m4-6v6"
+            />
+          </svg>
+        ) : (
+          <svg
+            className={iconSize}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
         )}
@@ -924,6 +1030,7 @@ interface FlipCardProps {
   speakQuestion: boolean;
   speakAnswer: boolean;
   onAnimationEnd?: () => void;
+  onAudioToggleRef?: (toggle: () => void) => void;
 }
 
 /**
@@ -945,6 +1052,7 @@ function FlipCard({
   speakQuestion,
   speakAnswer,
   onAnimationEnd,
+  onAudioToggleRef,
 }: FlipCardProps) {
   const large = size === 'lg';
   const faceClass = large
@@ -965,17 +1073,25 @@ function FlipCard({
 
   const renderFace = (face: FlipFace, isBack: boolean) => {
     const canSpeak = face.side === 'question' ? speakQuestion : speakAnswer;
+    const isVisible = isBack === flipped;
     return (
       <div
         className={`[grid-area:1/1] [backface-visibility:hidden] ${faceClass} ${
           isBack ? '[transform:rotateY(180deg)]' : ''
         }`}
-        aria-hidden={isBack !== flipped}
+        aria-hidden={!isVisible}
       >
         {needsReview && <div className={badgeClass}>Need to review</div>}
         <div className={labelClass}>
           {face.label}
-          {canSpeak && <SpeakButton flashcardId={flashcardId} side={face.side} size={size} />}
+          {canSpeak && (
+            <SpeakButton
+              flashcardId={flashcardId}
+              side={face.side}
+              size={size}
+              onToggleRef={isVisible ? onAudioToggleRef : undefined}
+            />
+          )}
         </div>
         <div className={textClass}>
           <div className="whitespace-pre-wrap">{face.text}</div>
