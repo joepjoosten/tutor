@@ -65,18 +65,7 @@ export default function FlashcardStudyPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          {flashcardSet.title}
-        </h2>
-        {flashcardSet.description && (
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            {flashcardSet.description}
-          </p>
-        )}
-      </div>
-
+    <div className="max-w-4xl mx-auto px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
       <FlashcardViewer
         flashcards={flashcardSet.flashcards.map((card) => ({
           id: card._id,
