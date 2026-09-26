@@ -105,11 +105,34 @@ body {
   animation: card-exit-prev 300ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+/* A write-answer blank rejects a letter that does not fit the word. */
+@keyframes blank-reject {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20%, 60% {
+    transform: translateX(-5px);
+  }
+  40%, 80% {
+    transform: translateX(5px);
+  }
+}
+
+.blank-reject {
+  animation: blank-reject 320ms ease-in-out;
+}
+
+/* Doubled class so the flash wins over the slot's own colour utilities. */
+.blank-reject .blank-slot.blank-slot {
+  border-color: rgb(239 68 68);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card-enter-next,
   .card-enter-prev,
   .card-exit-next,
-  .card-exit-prev {
+  .card-exit-prev,
+  .blank-reject {
     animation: none;
   }
 }

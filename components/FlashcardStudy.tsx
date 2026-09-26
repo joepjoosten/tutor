@@ -8,6 +8,7 @@ import {
   parseSharedStudyProgress,
   serializeSharedStudyProgress,
 } from '@/lib/sharedStudyProgress';
+import WriteAnswer from '@/components/WriteAnswer';
 
 export interface FlashcardStudyCard {
   id: string;
@@ -87,6 +88,10 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   const [dontKnowCards, setDontKnowCards] = useState<SharedStudyProgress>({});
   const [randomize, setRandomize] = useState(false);
   const [localFlipMode, setLocalFlipMode] = useState(flipMode);
+  // Type the answer into fill-in blanks instead of only flipping the card.
+  const [writeMode, setWriteMode] = useState(false);
+  // Bumped on every card change so the write-answer blanks start empty, even when the same card comes back.
+  const [cardVisit, setCardVisit] = useState(0);
   // Which way the next card slides in; set by the navigation handlers.
   const slideDirectionRef = useRef<'next' | 'prev'>('next');
   // Where the current touch started, for swipe navigation on touch screens.
@@ -233,6 +238,11 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Let text fields keep their own keys, e.g. while writing an answer.
+      if (event.target instanceof HTMLElement && event.target.closest('input, textarea, [contenteditable="true"]')) {
+        return;
+      }
+
       // Handle 's' key for audio toggle
       if (event.key === 's' || event.key === 'S') {
         if (audioToggleRef.current) {
@@ -324,6 +334,7 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   /** Remembers the current card so it can slide out while the next slides in. */
   const beginSlide = (direction: 'next' | 'prev') => {
     slideDirectionRef.current = direction;
+    setCardVisit((previous) => previous + 1);
     if (animations && currentCard) {
       setOutgoing({ card: currentCard, flipped: showAnswer, direction });
     }
@@ -510,6 +521,16 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
     back: localFlipMode ? card.question : card.answer,
   });
 
+  const writeAnswer = writeMode && (
+    <WriteAnswer
+      key={`${currentCard.id}-${localFlipMode}-${cardVisit}`}
+      answer={faceTexts(currentCard).back}
+      onDarkBackground={isFullscreen}
+      onCheck={() => setShowAnswer(true)}
+      onContinue={(correct) => void (correct ? markCorrect() : markDontKnow())}
+    />
+  );
+
   /** The current card plus, while sliding, the previous card on its way out. */
   const renderCards = (size: 'sm' | 'lg') => (
     <>
@@ -592,6 +613,8 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
 
         <div className="grid flex-1 min-h-0 max-w-4xl w-full touch-pan-y" {...swipeHandlers}>{renderCards('lg')}</div>
 
+        {writeAnswer}
+
         <div className="flex items-center w-full gap-3 flex-shrink-0">
           <IconNavButton
             onClick={prevCard}
@@ -663,6 +686,23 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
             <span className="hidden sm:inline">Flip</span>
           </button>
           <button
+            onClick={() => {
+              setWriteMode((prev) => !prev);
+              setShowAnswer(false);
+            }}
+            className={`px-3 py-1.5 rounded-lg transition-colors text-sm flex items-center gap-1.5 ${
+              writeMode
+                ? 'bg-teal-600 text-white hover:bg-teal-700'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
+            }`}
+            title="Write the answer"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+            <span className="hidden sm:inline">Write</span>
+          </button>
+          <button
             onClick={() => setShowDontKnowOnly(!showDontKnowOnly)}
             className={`px-3 py-1.5 rounded-lg transition-colors text-sm flex items-center gap-1.5 ${
               showDontKnowOnly
@@ -717,6 +757,8 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
       <div className="overflow-x-clip -mx-4 px-4">
         <div className="grid touch-pan-y" {...swipeHandlers}>{renderCards('sm')}</div>
       </div>
+
+      {writeAnswer && <div className="mt-6">{writeAnswer}</div>}
 
       <div className="mt-6 flex items-center gap-2">
         <button
