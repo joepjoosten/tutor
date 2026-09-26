@@ -89,6 +89,10 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
   const [localFlipMode, setLocalFlipMode] = useState(flipMode);
   // Which way the next card slides in; set by the navigation handlers.
   const slideDirectionRef = useRef<'next' | 'prev'>('next');
+  // Where the current touch started, for swipe navigation on touch screens.
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Set after a swipe so the tap-to-flip click that may follow is ignored.
+  const swipedRef = useRef(false);
   // The card that is sliding out while the new one slides in.
   const [outgoing, setOutgoing] = useState<{
     card: FlashcardStudyCard;
@@ -337,6 +341,37 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
     setCurrentIndex((prev) => (prev - 1 + visibleCards.length) % visibleCards.length);
   };
 
+  /** Swipe left for the next card, right for the previous one, like the arrow keys. */
+  const swipeHandlers = {
+    onTouchStart: (event: React.TouchEvent) => {
+      const touch = event.touches[0];
+      swipeStartRef.current = event.touches.length === 1 ? { x: touch.clientX, y: touch.clientY } : null;
+      swipedRef.current = false;
+    },
+    onTouchEnd: (event: React.TouchEvent) => {
+      const start = swipeStartRef.current;
+      swipeStartRef.current = null;
+      if (!start || visibleCards.length <= 1) return;
+      const touch = event.changedTouches[0];
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      // Ignore short or mostly vertical gestures so taps and page scrolling still work.
+      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      swipedRef.current = true;
+      if (dx < 0) {
+        nextCard();
+      } else {
+        prevCard();
+      }
+    },
+    onClickCapture: (event: React.MouseEvent) => {
+      if (swipedRef.current) {
+        swipedRef.current = false;
+        event.stopPropagation();
+      }
+    },
+  };
+
   const toggleAnswer = () => {
     setShowAnswer(!showAnswer);
   };
@@ -555,7 +590,7 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
           </button>
         </div>
 
-        <div className="grid flex-1 min-h-0 max-w-4xl w-full">{renderCards('lg')}</div>
+        <div className="grid flex-1 min-h-0 max-w-4xl w-full touch-pan-y" {...swipeHandlers}>{renderCards('lg')}</div>
 
         <div className="flex items-center w-full gap-3 flex-shrink-0">
           <IconNavButton
@@ -680,7 +715,7 @@ export default function FlashcardStudy(props: FlashcardStudyProps) {
       {/* Clip the slide-in overshoot so no page scrollbar flashes; the padding keeps room for the shadow. */}
       {/* Clip the slide overshoot so no page scrollbar flashes; the padding keeps room for the shadow. */}
       <div className="overflow-x-clip -mx-4 px-4">
-        <div className="grid">{renderCards('sm')}</div>
+        <div className="grid touch-pan-y" {...swipeHandlers}>{renderCards('sm')}</div>
       </div>
 
       <div className="mt-6 flex items-center gap-2">
